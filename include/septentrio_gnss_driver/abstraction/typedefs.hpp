@@ -59,6 +59,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <sensor_msgs/msg/time_reference.hpp>
+#include <std_srvs/srv/trigger.hpp>
 // GNSS msg includes
 #include <septentrio_gnss_driver/msg/aim_plus_status.hpp>
 #include <septentrio_gnss_driver/msg/att_cov_euler.hpp>

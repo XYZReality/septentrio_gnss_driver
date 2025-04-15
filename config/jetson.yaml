@@ -4,6 +4,7 @@
 septentrio_gnss_driver:
   ros__parameters:
     device: serial:/dev/ttyACM1
+    # device: file_name:/apps/output/01-04-25_gps_test3/log.sbf
 
     serial:
       baudrate: 921600
@@ -124,13 +125,13 @@ septentrio_gnss_driver:
       poscovcartesian: false
       poscovgeodetic: true
       velcovcartesian: false
-      velcovgeodetic: true
-      atteuler: true
-      attcoveuler: true
+      velcovgeodetic: false
+      atteuler: false
+      attcoveuler: false
       pose: false
       twist: false
       diagnostics: false
-      aimplusstatus: true
+      aimplusstatus: false
       galauthstatus: false
       # For GNSS Rx only
       gpgsa: false

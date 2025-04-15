@@ -40,7 +40,7 @@ int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
 
-    auto options = rclcpp::NodeOptions().use_intra_process_comms(false);
+    auto options = rclcpp::NodeOptions().use_intra_process_comms(true);
     auto rx_node = std::make_shared<rosaic_node::ROSaicNode>(options);
 
     rclcpp::spin(rx_node->get_node_base_interface());

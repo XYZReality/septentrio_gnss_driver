@@ -63,9 +63,10 @@ namespace rosaic_node {
         // Parameters must be set before initializing IO
         if (!getROSParams())
             return;
-
-        setupThread_ = std::thread(std::bind(&ROSaicNode::setup, this));
-
+        
+        // Advertise services instead of automatically connecting
+        advertiseServices();
+        
         this->log(log_level::DEBUG, "Leaving ROSaicNode() constructor..");
     }
 
@@ -76,10 +77,71 @@ namespace rosaic_node {
             setupThread_.join();
     }
 
+    void ROSaicNode::advertiseServices()
+    {
+        this->log(log_level::INFO, "Advertising services: start and stop");
+        
+        // Advertise the "start" service
+        start_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "start", std::bind(&ROSaicNode::startServiceCallback, this, 
+            std::placeholders::_1, std::placeholders::_2));
+        
+        // Advertise the "stop" service
+        stop_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "stop", std::bind(&ROSaicNode::stopServiceCallback, this, 
+            std::placeholders::_1, std::placeholders::_2));
+    }
+    
+    void ROSaicNode::startServiceCallback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        
+        this->log(log_level::INFO, "Received start command");
+        
+        // Check if already connected
+        if (isConnected_) {
+            response->success = false;
+            response->message = "Already connected";
+            return;
+        }
+        
+        // Start connection in separate thread
+        setupThread_ = std::thread(std::bind(&ROSaicNode::setup, this));
+        
+        response->success = true;
+        response->message = "Connection started";
+    }
+    
+    void ROSaicNode::stopServiceCallback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        
+        this->log(log_level::INFO, "Received stop command");
+        
+        // Check if already disconnected
+        if (!isConnected_) {
+            response->success = false;
+            response->message = "Already disconnected";
+            return;
+        }
+        
+        // Close the connection
+        IO_.close();
+        if (setupThread_.joinable())
+            setupThread_.join();
+        
+        isConnected_ = false;
+        response->success = true;
+        response->message = "Connection stopped";
+    }
+
     void ROSaicNode::setup()
     {
         // Initializes Connection
         IO_.connect();
+        isConnected_ = true;
     }
 
     [[nodiscard]] bool ROSaicNode::getROSParams()
