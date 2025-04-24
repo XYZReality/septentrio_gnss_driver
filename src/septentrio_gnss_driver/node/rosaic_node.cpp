@@ -43,6 +43,8 @@ namespace rosaic_node {
     ROSaicNode::ROSaicNode(const rclcpp::NodeOptions& options) :
         ROSaicNodeBase(options), IO_(this), tfBuffer_(this->get_clock())
     {
+        param("log_sbf", settings_.log_sbf, false);
+        param("output_path", settings_.output_path, static_cast<std::string>("~/.ros/log"));
         param("activate_debug_log", settings_.activate_debug_log, false);
         if (settings_.activate_debug_log)
         {

@@ -20,13 +20,18 @@ def generate_launch_description():
         'gnss_config', default_value=config_path, description='Path to the config file'
     ))
 
+    ld.add_action(DeclareLaunchArgument(
+        'output_path', default_value='/apps/output', description='Path to the output folder'
+    ))
+
     node = Node(
             package='septentrio_gnss_driver',
             executable='septentrio_gnss_driver_node',
             name='septentrio_gnss_driver',
             emulate_tty=True,
             sigterm_timeout = '20',
-            parameters=[LaunchConfiguration('gnss_config')])
+            parameters=[LaunchConfiguration('gnss_config'),
+                {'output_path': LaunchConfiguration('output_path')}])
 
     ld.add_action(node)
     return ld

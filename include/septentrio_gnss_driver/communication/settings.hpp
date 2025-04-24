@@ -148,6 +148,10 @@ namespace device_type {
 //! Settings struct
 struct Settings
 {
+    //! Output folder for log files
+    std::string output_path;
+    //! Enable .sbf file writing
+    bool log_sbf;
     //! Set logger level to DEBUG
     bool activate_debug_log;
     //! Device

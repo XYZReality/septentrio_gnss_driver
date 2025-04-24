@@ -194,3 +194,4 @@ septentrio_gnss_driver:
     # logger
 
     activate_debug_log: false
+    log_sbf: true

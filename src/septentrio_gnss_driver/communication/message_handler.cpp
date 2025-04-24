@@ -55,6 +55,34 @@ using parsing_utilities::square;
 
 namespace io {
 
+    bool MessageHandler::openSbfOutputFile()
+    {
+        if (settings_->log_sbf)
+        {
+            std::string filename = settings_->output_path + "/septentrio.sbf";
+            sbf_outfile_.open(filename, std::ios::out | std::ios::binary);
+            
+            if (!sbf_outfile_.is_open())
+            {
+                node_->log(log_level::ERROR, "Failed to open SBF output file: " + filename);
+                return false;
+            }
+            
+            node_->log(log_level::INFO, "Writing SBF data to file: " + filename);
+            return true;
+        }
+        return true; // No file output requested, so this is fine
+    }
+    
+    void MessageHandler::closeSbfOutputFile()
+    {
+        if (sbf_outfile_.is_open())
+        {
+            sbf_outfile_.close();
+            node_->log(log_level::INFO, "Closed SBF output file");
+        }
+    }
+
     void MessageHandler::assemblePoseWithCovarianceStamped()
     {
         if (!settings_->publish_pose)
@@ -2181,8 +2209,23 @@ namespace io {
 
     void MessageHandler::parseSbf(const std::shared_ptr<Telegram>& telegram)
     {
+        // One-time initialization of output file if needed
+        static bool file_initialized = false;
+        if (!file_initialized && settings_->log_sbf) {
+            openSbfOutputFile();
+            file_initialized = true;
+        }
 
         uint16_t sbfId = parsing_utilities::getId(telegram->message);
+
+        // In the parseSbf function, at the beginning, add:
+        if (settings_->log_sbf && sbf_outfile_.is_open())
+        {
+            // Write the raw telegram message to the file
+            sbf_outfile_.write(reinterpret_cast<const char*>(telegram->message.data()), 
+                            telegram->message.size());
+            sbf_outfile_.flush();
+        }
 
         /*node_->log(log_level::DEBUG, "ROSaic reading SBF block " +
                                         std::to_string(sbfId) + " made up of " +

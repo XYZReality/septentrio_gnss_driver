@@ -63,6 +63,7 @@
 #include <cstddef>
 #include <map>
 #include <sstream>
+#include <fstream>  // for std::ofstream
 // Boost includes
 #include <boost/call_traits.hpp>
 #include <boost/format.hpp>
@@ -152,6 +153,25 @@ namespace io {
         {
         }
 
+        /**
+         * @brief Destructor to ensure file resources are released
+         */
+        ~MessageHandler()
+        {
+            closeSbfOutputFile();
+        }
+
+        /**
+         * @brief Opens an SBF file for writing if enabled in settings
+         * @return True if file opened successfully or not needed, false otherwise
+         */
+        bool openSbfOutputFile();
+
+        /**
+         * @brief Closes the SBF output file if open
+         */
+        void closeSbfOutputFile();
+
         void setLeapSeconds()
         {
             // set leap seconds to paramter if reading from file
@@ -205,6 +225,11 @@ namespace io {
          * @brief Pointer to settings struct
          */
         const Settings* settings_;
+
+        /**
+         * @brief SBF output file
+         */
+        std::ofstream sbf_outfile_;
 
         /**
          * @brief Map of NMEA messgae IDs and uint8_t
