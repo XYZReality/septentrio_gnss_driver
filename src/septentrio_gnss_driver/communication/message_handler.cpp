@@ -2218,7 +2218,6 @@ namespace io {
 
         uint16_t sbfId = parsing_utilities::getId(telegram->message);
 
-        // In the parseSbf function, at the beginning, add:
         if (settings_->log_sbf && sbf_outfile_.is_open())
         {
             // Write the raw telegram message to the file
