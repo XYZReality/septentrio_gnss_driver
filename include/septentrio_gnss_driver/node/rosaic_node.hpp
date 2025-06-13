@@ -92,6 +92,7 @@ namespace rosaic_node {
 
     private:
         void setup();
+        void takedown();
         /**
          * @brief Gets the node parameters from the ROS Parameter Server, parts of
          * which are specified in a YAML file

@@ -74,9 +74,7 @@ namespace rosaic_node {
 
     ROSaicNode::~ROSaicNode()
     {
-        IO_.close();
-        if (setupThread_.joinable())
-            setupThread_.join();
+        takedown();
     }
 
     void ROSaicNode::advertiseServices()
@@ -130,20 +128,30 @@ namespace rosaic_node {
         }
         
         // Close the connection
-        IO_.close();
-        if (setupThread_.joinable())
-            setupThread_.join();
-        
-        isConnected_ = false;
+        takedown();
         response->success = true;
         response->message = "Connection stopped";
     }
 
     void ROSaicNode::setup()
     {
-        // Initializes Connection
-        IO_.connect();
-        isConnected_ = true;
+        if(!isConnected_)
+        {
+            // Initializes Connection
+            IO_.connect();
+            isConnected_ = true;
+        }
+    }
+
+    void ROSaicNode::takedown()
+    {
+        if(isConnected_)
+        {
+            IO_.close();
+            if (setupThread_.joinable())
+                setupThread_.join();
+            isConnected_ = false;
+        }
     }
 
     [[nodiscard]] bool ROSaicNode::getROSParams()

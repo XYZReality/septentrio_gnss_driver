@@ -63,7 +63,6 @@
 #include <cstddef>
 #include <map>
 #include <sstream>
-#include <fstream>  // for std::ofstream
 // Boost includes
 #include <boost/call_traits.hpp>
 #include <boost/format.hpp>
@@ -396,6 +395,7 @@ namespace io {
          * ImuMsg messages
          */
         void assembleImu();
+        bool hasImuMeas_ = false;
 
         /**
          * @brief "Callback" function when constructing

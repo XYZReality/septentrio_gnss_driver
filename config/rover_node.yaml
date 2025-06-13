@@ -3,7 +3,7 @@
 # GNSS/INS Parameters
 septentrio_gnss_driver:
   ros__parameters:
-    device: serial:/dev/ttyACM1
+    device: tcp://192.168.3.1:28784
 
     serial:
       baudrate: 921600
@@ -18,7 +18,7 @@ septentrio_gnss_driver:
         port: 0
         unicast_ip: ""
 
-    configure_rx: false
+    configure_rx: true
 
     custom_commands_file: ""
 
@@ -192,4 +192,4 @@ septentrio_gnss_driver:
 
     # logger
 
-    activate_debug_log: true
+    activate_debug_log: false
