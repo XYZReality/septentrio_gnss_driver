@@ -68,14 +68,26 @@ namespace io {
                 return false;
             }
             
+            // Start the writer thread before adding any data to queue
+            sbf_writer_running_ = true;
+            sbf_writer_thread_ = std::thread(&MessageHandler::sbfWriterWorker, this);
+            
             node_->log(log_level::INFO, "Writing SBF data to file: " + filename);
-            return true;
         }
-        return true; // No file output requested, so this is fine
+        return true;
     }
-    
+
     void MessageHandler::closeSbfOutputFile()
     {
+        // Signal the writer thread to stop
+        sbf_writer_running_ = false;
+        
+        // Wait for thread to finish
+        if (sbf_writer_thread_.joinable()) {
+            sbf_writer_thread_.join();
+        }
+        
+        // Close file
         if (sbf_outfile_.is_open())
         {
             sbf_outfile_.close();
@@ -2197,6 +2209,53 @@ namespace io {
         }
     }
 
+    void MessageHandler::sbfWriterWorker()
+    {
+        node_->log(log_level::INFO, "SBF file writer thread started");
+        
+        while (sbf_writer_running_ || !sbf_write_queue_.empty()) {
+            // Process queue until empty and thread should stop
+            if (!sbf_writer_running_ && sbf_write_queue_.empty()) {
+                break;
+            }
+            
+            std::vector<uint8_t> message_data;
+            
+            // Use a timeout so we can check sbf_writer_running_ periodically if queue is empty
+            try {
+                if (sbf_writer_running_) {
+                    // The queue's pop method will wait until data is available
+                    sbf_write_queue_.pop(message_data);
+                    
+                    // Write data to file
+                    if (sbf_outfile_.is_open()) {
+                        sbf_outfile_.write(reinterpret_cast<const char*>(message_data.data()), 
+                                        message_data.size());
+                        
+                        // Flush periodically (every 10 messages)
+                        static int flush_counter = 0;
+                        if (++flush_counter >= 10) {
+                            sbf_outfile_.flush();
+                            flush_counter = 0;
+                        }
+                    }
+                } else {
+                    // Small delay to prevent CPU spinning when shutting down
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+            } catch (const std::exception& e) {
+                node_->log(log_level::ERROR, "Exception in SBF writer thread: " + std::string(e.what()));
+            }
+        }
+        
+        // Final flush to ensure all data is written
+        if (sbf_outfile_.is_open()) {
+            sbf_outfile_.flush();
+        }
+        
+        node_->log(log_level::INFO, "SBF file writer thread stopped");
+    }
+
     void MessageHandler::parseSbf(const std::shared_ptr<Telegram>& telegram)
     {
         // One-time initialization of output file if needed
@@ -2208,12 +2267,10 @@ namespace io {
 
         uint16_t sbfId = parsing_utilities::getId(telegram->message);
 
-        if (settings_->log_sbf && sbf_outfile_.is_open())
-        {
-            // Write the raw telegram message to the file
-            sbf_outfile_.write(reinterpret_cast<const char*>(telegram->message.data()), 
-                            telegram->message.size());
-            sbf_outfile_.flush();
+        // Queue telegram for asynchronous file writing if enabled
+        if (settings_->log_sbf && sbf_writer_running_) {
+            // Push a copy to the queue and let the worker thread handle file writing
+            sbf_write_queue_.push(telegram->message);
         }
 
         /*node_->log(log_level::DEBUG, "ROSaic reading SBF block " +

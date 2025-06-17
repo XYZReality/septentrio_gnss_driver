@@ -63,6 +63,7 @@
 #include <cstddef>
 #include <map>
 #include <sstream>
+#include <fstream>  // for std::ofstream
 // Boost includes
 #include <boost/call_traits.hpp>
 #include <boost/format.hpp>
@@ -230,6 +231,26 @@ namespace io {
          */
         std::ofstream sbf_outfile_;
 
+        /**
+         * @brief Queue for storing SBF data for asynchronous writing
+         */
+        ConcurrentQueue<std::vector<uint8_t>> sbf_write_queue_;
+        
+        /**
+         * @brief Thread for handling SBF file writing operations
+         */
+        std::thread sbf_writer_thread_;
+        
+        /**
+         * @brief Flag indicating whether the SBF writer thread is active
+         */
+        std::atomic<bool> sbf_writer_running_{false};
+        
+        /**
+         * @brief Worker function that processes the SBF write queue and writes data to file
+         */
+        void sbfWriterWorker();
+        
         /**
          * @brief Map of NMEA messgae IDs and uint8_t
          */
