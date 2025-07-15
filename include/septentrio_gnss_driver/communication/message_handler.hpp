@@ -83,6 +83,7 @@
 #include <septentrio_gnss_driver/parsers/nmea_parsers/gpgsv.hpp>
 #include <septentrio_gnss_driver/parsers/nmea_parsers/gprmc.hpp>
 #include <septentrio_gnss_driver/parsers/string_utilities.hpp>
+#include <proj.h>
 
 /**
  * @file message_parser.hpp
@@ -159,6 +160,7 @@ namespace io {
         ~MessageHandler()
         {
             closeSbfOutputFile();
+            cleanupProjection();
         }
 
         /**
@@ -487,5 +489,31 @@ namespace io {
          * epoch
          */
         Timestamp timestampSBF(uint32_t tow, uint16_t wnc) const;
+        
+        /**
+         * @brief Transforms coordinates from source to target coordinate system using PROJ
+         * @param[in,out] latitude Latitude in radians (will be modified in-place)
+         * @param[in,out] longitude Longitude in radians (will be modified in-place)
+         * @param[in,out] height Height in meters (will be modified in-place)
+         * @return true if transformation was successful, false otherwise
+         */
+        bool transformCoordinates(double& latitude, double& longitude, double& height) const;
+        
+    private:
+        //! PROJ context for coordinate transformations
+        mutable PJ_CONTEXT* proj_context_ = nullptr;
+        //! PROJ transformation object
+        mutable PJ* proj_transform_ = nullptr;
+        
+        /**
+         * @brief Initialize PROJ transformation
+         * @return true if initialization was successful, false otherwise
+         */
+        bool initializeProjection() const;
+        
+        /**
+         * @brief Cleanup PROJ resources
+         */
+        void cleanupProjection() const;
     };
 } // namespace io

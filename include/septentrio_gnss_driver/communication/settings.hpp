@@ -375,6 +375,14 @@ struct Settings
     bool read_from_pcap = false;
     //! INS VSM setting
     InsVsm ins_vsm;
+    //! Enable coordinate transformation from ETRF to ITRF/WGS84
+    bool enable_coordinate_transformation = false;
+    //! Source coordinate system (e.g., "ETRF2000")
+    std::string source_coordinate_system = "ETRF2000";
+    //! Target coordinate system (e.g., "WGS84")
+    std::string target_coordinate_system = "WGS84";
+    //! Epoch for coordinate transformation (e.g., "2020.0")
+    std::string coordinate_transformation_epoch = "2020.0";
 };
 
 //! Capabilities struct

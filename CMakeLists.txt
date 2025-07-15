@@ -19,6 +19,8 @@ set(WARNFLAGS "-Wall -Wextra -Wpedantic -Wcast-align -Wnon-virtual-dtor -Woverlo
 find_package(Boost REQUIRED)
 LIST(APPEND CMAKE_MODULE_PATH "/usr/share/cmake/geographiclib")
 find_package(GeographicLib REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(PROJ REQUIRED proj)
 
 ## For PCAP file handling
 find_library(libpcap_LIBRARIES pcap)
@@ -104,6 +106,7 @@ if(catkin_FOUND)
     ${catkin_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
     ${GeographicLib_INCLUDE_DIRS}
+    ${PROJ_INCLUDE_DIRS}
   )
   add_executable(${PROJECT_NAME}_node
     src/septentrio_gnss_driver/communication/communication_core.cpp
@@ -125,6 +128,7 @@ if(catkin_FOUND)
     ${Boost_LIBRARIES} 
     ${libpcap_LIBRARIES}
     ${GeographicLib_LIBRARIES}
+    ${PROJ_LIBRARIES}
   )
   target_compile_definitions(${PROJECT_NAME}_node PUBLIC ROS1)
  
@@ -200,11 +204,13 @@ elseif(ament_cmake_FOUND)
     src/septentrio_gnss_driver/parsers/string_utilities.cpp 
   )
   target_compile_definitions(${library_name} PUBLIC ROS2)
+  target_include_directories(${library_name} PRIVATE ${PROJ_INCLUDE_DIRS})
   target_link_libraries(${library_name}
     boost_regex # ordering is important for regex https://stackoverflow.com/questions/17588440/cannot-link-boost-regex
     ${Boost_LIBRARIES}
     pcap
     ${GeographicLib_LIBRARIES}
+    ${PROJ_LIBRARIES}
   )
 
   if(${rosidl_cmake_VERSION} VERSION_LESS 2.5.0)

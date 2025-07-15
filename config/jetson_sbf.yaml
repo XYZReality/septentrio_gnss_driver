@@ -3,8 +3,7 @@
 # GNSS/INS Parameters
 septentrio_gnss_driver:
   ros__parameters:
-    device: serial:/dev/ttyACM1
-    # device: file_name:/apps/output/01-04-25_gps_test3/log.sbf
+    device: file_name:/apps/output/15-07-25_gps+viewer_test3/septentrio.sbf
 
     serial:
       baudrate: 921600
@@ -76,6 +75,7 @@ septentrio_gnss_driver:
 
     # time
     use_gnss_time: false
+    leap_seconds: 18  # Current GPS-UTC offset (adjust as needed)
     ntp_server: true
     ptp_server_clock: false
     latency_compensation: true
@@ -109,10 +109,10 @@ septentrio_gnss_driver:
         keep_open: true
 
     coordinate_transformation:
-      enable: false
+      enable: true
       source_coordinate_system: "ETRF2000"
       target_coordinate_system: "WGS84"
-      coordinate_transformation_epoch: "2020.0"   
+      coordinate_transformation_epoch: "2020.0"    
 
     publish:
       # For both GNSS and INS Rxs

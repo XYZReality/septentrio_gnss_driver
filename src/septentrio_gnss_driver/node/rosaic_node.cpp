@@ -135,21 +135,28 @@ namespace rosaic_node {
 
     void ROSaicNode::setup()
     {
+        log(log_level::INFO, "Connection setup.");
         if(!isConnected_)
         {
             // Initializes Connection
             IO_.connect();
             isConnected_ = true;
+            log(log_level::INFO, "Connection established successfully.");
         }
     }
 
     void ROSaicNode::takedown()
     {
+        log(log_level::INFO, "Takedown called, closing connection...");
         if(isConnected_)
         {
             IO_.close();
             if (setupThread_.joinable())
+            {
                 setupThread_.join();
+                this->log(log_level::INFO, "Thread Joined");
+            }
+
             isConnected_ = false;
         }
     }
@@ -332,6 +339,18 @@ namespace rosaic_node {
         param("poi_to_arp.delta_u", settings_.delta_u, 0.0f);
 
         param("use_ros_axis_orientation", settings_.use_ros_axis_orientation, true);
+
+        // Coordinate transformation parameters
+        param("coordinate_transformation.enable", settings_.enable_coordinate_transformation, false);
+        param("coordinate_transformation.source_crs", settings_.source_coordinate_system, std::string("ETRF2000"));
+        param("coordinate_transformation.target_crs", settings_.target_coordinate_system, std::string("WGS84"));
+        param("coordinate_transformation.epoch", settings_.coordinate_transformation_epoch, std::string("2020.0"));
+        
+        if (settings_.enable_coordinate_transformation) {
+            this->log(log_level::INFO, "Coordinate transformation enabled: " + 
+                      settings_.source_coordinate_system + " -> " + settings_.target_coordinate_system + 
+                      " (epoch: " + settings_.coordinate_transformation_epoch + ")");
+        }
 
         // INS Spatial Configuration
         bool getConfigFromTf;
@@ -797,7 +816,7 @@ namespace rosaic_node {
             settings_.device_type = device_type::TCP;
         } else if (boost::regex_match(
                        settings_.device, match,
-                       boost::regex("(file_name):(/|(?:/[\\w-]+)+.sbf)")))
+                       boost::regex("(file_name):(/\\S+\\.sbf)")))
         {
             settings_.read_from_sbf_log = true;
             settings_.use_gnss_time = true;

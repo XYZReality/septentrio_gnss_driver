@@ -32,6 +32,8 @@
 #include <boost/tokenizer.hpp>
 #include <septentrio_gnss_driver/communication/message_handler.hpp>
 #include <thread>
+#include <cmath>
+#include <chrono>
 
 /**
  * The position_covariance array is populated in row-major order, where the basis of
@@ -2306,6 +2308,25 @@ namespace io {
                 node_->log(log_level::ERROR, "parse error in PVTGeodetic");
                 break;
             }
+            
+            // Apply coordinate transformation if enabled
+            if (settings_->enable_coordinate_transformation) {
+                double lat = last_pvtgeodetic_.latitude;
+                double lon = last_pvtgeodetic_.longitude;
+                double height = last_pvtgeodetic_.height;
+                
+                if (transformCoordinates(lat, lon, height)) {
+                    last_pvtgeodetic_.latitude = lat;
+                    last_pvtgeodetic_.longitude = lon;
+                    last_pvtgeodetic_.height = height;
+                    
+                    node_->log(log_level::DEBUG, "Coordinate transformation applied: " +
+                               settings_->source_coordinate_system + " -> " + settings_->target_coordinate_system);
+                } else {
+                    node_->log(log_level::WARN, "Coordinate transformation failed, using original coordinates");
+                }
+            }
+            
             assembleHeader(settings_->frame_id, telegram, last_pvtgeodetic_);
             if (settings_->publish_pvtgeodetic)
                 publish<PVTGeodeticMsg>("pvtgeodetic", last_pvtgeodetic_);
@@ -2975,6 +2996,106 @@ namespace io {
         {
             node_->log(log_level::DEBUG, "Unknown NMEA message: " + body[0]);
         }
+    }
+
+    bool MessageHandler::initializeProjection() const
+    {
+        if (!settings_->enable_coordinate_transformation) {
+            return true; // No transformation needed
+        }
+        
+        if (proj_context_ && proj_transform_) {
+            return true; // Already initialized
+        }
+        
+        // Initialize PROJ context
+        proj_context_ = proj_context_create();
+        if (!proj_context_) {
+            node_->log(log_level::ERROR, "Failed to create PROJ context");
+            return false;
+        }
+        
+        // Create transformation string
+        std::string transformation_str = "+proj=pipeline +step +proj=axisswap +order=2,1 +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=cart +ellps=GRS80 +step +proj=helmert +convention=coordinate_frame +x=0 +y=0 +z=0 +rx=0 +ry=0 +rz=0 +s=0 +step +proj=cart +ellps=WGS84 +inv +step +proj=unitconvert +xy_in=rad +xy_out=deg +step +proj=axisswap +order=2,1";
+        
+        // For more precise transformations, we can use specific EPSG codes
+        // For now, use a simple transformation that should work for most European ETRF to WGS84 conversions
+        if (settings_->source_coordinate_system == "ETRF2000" && settings_->target_coordinate_system == "WGS84") {
+            transformation_str = "+proj=pipeline +step +proj=axisswap +order=2,1 +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=cart +ellps=GRS80 +step +proj=helmert +convention=coordinate_frame +x=0.054 +y=0.051 +z=-0.048 +rx=-0.000269 +ry=-0.000106 +rz=0.000326 +s=0 +step +proj=cart +ellps=WGS84 +inv +step +proj=unitconvert +xy_in=rad +xy_out=deg +step +proj=axisswap +order=2,1";
+        }
+        
+        // Create transformation object
+        proj_transform_ = proj_create(proj_context_, transformation_str.c_str());
+        if (!proj_transform_) {
+            node_->log(log_level::ERROR, "Failed to create PROJ transformation: " + std::string(proj_errno_string(proj_errno(proj_transform_))));
+            proj_context_destroy(proj_context_);
+            proj_context_ = nullptr;
+            return false;
+        }
+        
+        node_->log(log_level::INFO, "PROJ coordinate transformation initialized: " + 
+                   settings_->source_coordinate_system + " -> " + settings_->target_coordinate_system);
+        
+        return true;
+    }
+
+    void MessageHandler::cleanupProjection() const
+    {
+        if (proj_transform_) {
+            proj_destroy(proj_transform_);
+            proj_transform_ = nullptr;
+        }
+        if (proj_context_) {
+            proj_context_destroy(proj_context_);
+            proj_context_ = nullptr;
+        }
+    }
+
+    bool MessageHandler::transformCoordinates(double& latitude, double& longitude, double& height) const
+    {
+        if (!settings_->enable_coordinate_transformation) {
+            return true; // No transformation needed
+        }
+        
+        if (!initializeProjection()) {
+            return false;
+        }
+        
+        // Convert from radians to degrees for PROJ
+        double lat_deg = latitude * 180.0 / M_PI;
+        double lon_deg = longitude * 180.0 / M_PI;
+        
+        // Create coordinate array
+        PJ_COORD coord_in, coord_out;
+        coord_in.lpz.lam = lon_deg;  // longitude
+        coord_in.lpz.phi = lat_deg;  // latitude
+        coord_in.lpz.z = height;     // height
+        
+        // Transform coordinates
+        coord_out = proj_trans(proj_transform_, PJ_FWD, coord_in);
+        
+        // Check for transformation errors
+        if (coord_out.lpz.lam == HUGE_VAL || coord_out.lpz.phi == HUGE_VAL) {
+            node_->log(log_level::ERROR, "PROJ coordinate transformation failed: " + 
+                       std::string(proj_errno_string(proj_errno(proj_transform_))));
+        }
+        
+        // Transform coordinates
+        coord_out = proj_trans(proj_transform_, PJ_FWD, coord_in);
+        
+        // Check for transformation errors
+        if (coord_out.lpz.lam == HUGE_VAL || coord_out.lpz.phi == HUGE_VAL) {
+            node_->log(log_level::ERROR, "PROJ coordinate transformation failed: " + 
+                       std::string(proj_errno_string(proj_errno(proj_transform_))));
+            return false;
+        }
+        
+        // Convert back to radians and update the input variables
+        latitude = coord_out.lpz.phi * M_PI / 180.0;
+        longitude = coord_out.lpz.lam * M_PI / 180.0;
+        height = coord_out.lpz.z;
+        
+        return true;
     }
 
 } // namespace io
