@@ -70,6 +70,9 @@ namespace io {
                 return false;
             }
             
+            // Reset the queue in case it was previously terminated
+            sbf_write_queue_.reset();
+            
             // Start the writer thread before adding any data to queue
             sbf_writer_running_ = true;
             sbf_writer_thread_ = std::thread(&MessageHandler::sbfWriterWorker, this);
@@ -83,6 +86,9 @@ namespace io {
     {
         // Signal the writer thread to stop
         sbf_writer_running_ = false;
+        
+        // Terminate the queue to wake up the writer thread
+        sbf_write_queue_.terminate();
         
         // Wait for thread to finish
         if (sbf_writer_thread_.joinable()) {
@@ -2215,38 +2221,34 @@ namespace io {
     {
         node_->log(log_level::INFO, "SBF file writer thread started");
         
-        while (sbf_writer_running_ || !sbf_write_queue_.empty()) {
-            // Process queue until empty and thread should stop
-            if (!sbf_writer_running_ && sbf_write_queue_.empty()) {
+        std::vector<uint8_t> message_data;
+        
+        while (sbf_writer_running_) {
+            // Try to pop a message from the queue
+            if (sbf_write_queue_.pop(message_data)) {
+                // Write data to file
+                if (sbf_outfile_.is_open()) {
+                    sbf_outfile_.write(reinterpret_cast<const char*>(message_data.data()), 
+                                    message_data.size());
+                    
+                    // Flush periodically (every 10 messages)
+                    static int flush_counter = 0;
+                    if (++flush_counter >= 10) {
+                        sbf_outfile_.flush();
+                        flush_counter = 0;
+                    }
+                }
+            } else {
+                // pop() returned false, meaning the queue was terminated
                 break;
             }
-            
-            std::vector<uint8_t> message_data;
-            
-            // Use a timeout so we can check sbf_writer_running_ periodically if queue is empty
-            try {
-                if (sbf_writer_running_) {
-                    // The queue's pop method will wait until data is available
-                    sbf_write_queue_.pop(message_data);
-                    
-                    // Write data to file
-                    if (sbf_outfile_.is_open()) {
-                        sbf_outfile_.write(reinterpret_cast<const char*>(message_data.data()), 
-                                        message_data.size());
-                        
-                        // Flush periodically (every 10 messages)
-                        static int flush_counter = 0;
-                        if (++flush_counter >= 10) {
-                            sbf_outfile_.flush();
-                            flush_counter = 0;
-                        }
-                    }
-                } else {
-                    // Small delay to prevent CPU spinning when shutting down
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-            } catch (const std::exception& e) {
-                node_->log(log_level::ERROR, "Exception in SBF writer thread: " + std::string(e.what()));
+        }
+        
+        // Process any remaining messages in the queue
+        while (sbf_write_queue_.pop(message_data)) {
+            if (sbf_outfile_.is_open()) {
+                sbf_outfile_.write(reinterpret_cast<const char*>(message_data.data()), 
+                                message_data.size());
             }
         }
         

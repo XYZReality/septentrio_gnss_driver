@@ -160,12 +160,15 @@ public:
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] size_t size() const noexcept;
     void push(const T& input) noexcept;
-    void pop(T& output) noexcept;
+    bool pop(T& output) noexcept;
+    void terminate() noexcept;
+    void reset() noexcept;
 
 private:
     std::queue<T> queue_;
     std::condition_variable cond_;
     mutable std::mutex mtx_;
+    bool is_terminated_ = false;
 };
 
 template <typename T>
@@ -193,12 +196,37 @@ void ConcurrentQueue<T>::push(const T& input) noexcept
 }
 
 template <typename T>
-void ConcurrentQueue<T>::pop(T& output) noexcept
+bool ConcurrentQueue<T>::pop(T& output) noexcept
 {
     std::unique_lock<std::mutex> lck(mtx_);
-    cond_.wait(lck, [this] { return !queue_.empty(); });
+    cond_.wait(lck, [this] { return !queue_.empty() || is_terminated_; });
+    
+    if (queue_.empty() && is_terminated_) {
+        return false;
+    }
+    
     output = queue_.front();
     queue_.pop();
+    return true;
+}
+
+template <typename T>
+void ConcurrentQueue<T>::terminate() noexcept
+{
+    {
+        std::lock_guard<std::mutex> lck(mtx_);
+        is_terminated_ = true;
+    }
+    cond_.notify_all();
+}
+
+template <typename T>
+void ConcurrentQueue<T>::reset() noexcept
+{
+    std::lock_guard<std::mutex> lck(mtx_);
+    std::queue<T> empty;
+    queue_.swap(empty);
+    is_terminated_ = false;
 }
 
 typedef ConcurrentQueue<std::shared_ptr<Telegram>> TelegramQueue;
