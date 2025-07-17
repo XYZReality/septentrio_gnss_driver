@@ -195,7 +195,7 @@ class ROSaicNodeBase : public rclcpp::Node
 public:
     ROSaicNodeBase(const rclcpp::NodeOptions& options) :
         Node("septentrio_gnss", options), tf2Publisher_(this),
-        tfBuffer_(this->get_clock()), tfListener_(tfBuffer_)
+        tfBuffer_(this->get_clock()) //, tfListener_(tfBuffer_)
     {
     }
 
@@ -607,7 +607,7 @@ private:
     //! tf buffer
     tf2_ros::Buffer tfBuffer_;
     // tf listener
-    tf2_ros::TransformListener tfListener_;
+    // tf2_ros::TransformListener tfListener_;
     // Capabilities of Rx
     Capabilities capabilities_;
 };

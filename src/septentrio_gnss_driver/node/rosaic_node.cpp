@@ -60,7 +60,7 @@ namespace rosaic_node {
 
         this->log(log_level::DEBUG, "Called ROSaicNode() constructor..");
 
-        tfListener_ = std::make_unique<tf2_ros::TransformListener>(tfBuffer_);
+        // tfListener_ = std::make_unique<tf2_ros::TransformListener>(tfBuffer_);
 
         // Parameters must be set before initializing IO
         if (!getROSParams())
