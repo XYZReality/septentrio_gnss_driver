@@ -3017,26 +3017,46 @@ namespace io {
             return false;
         }
         
-        // Create transformation string
-        std::string transformation_str = "+proj=pipeline +step +proj=axisswap +order=2,1 +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=cart +ellps=GRS80 +step +proj=helmert +convention=coordinate_frame +x=0 +y=0 +z=0 +rx=0 +ry=0 +rz=0 +s=0 +step +proj=cart +ellps=WGS84 +inv +step +proj=unitconvert +xy_in=rad +xy_out=deg +step +proj=axisswap +order=2,1";
+        // For London (UK), use proper EPSG transformation
+        // ETRS89 (EPSG:4258) to WGS84 (EPSG:4326) with epoch handling
+        std::string transformation_str;
         
-        // For more precise transformations, we can use specific EPSG codes
-        // For now, use a simple transformation that should work for most European ETRF to WGS84 conversions
-        if (settings_->source_coordinate_system == "ETRF2000" && settings_->target_coordinate_system == "WGS84") {
-            transformation_str = "+proj=pipeline +step +proj=axisswap +order=2,1 +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=cart +ellps=GRS80 +step +proj=helmert +convention=coordinate_frame +x=0.054 +y=0.051 +z=-0.048 +rx=-0.000269 +ry=-0.000106 +rz=0.000326 +s=0 +step +proj=cart +ellps=WGS84 +inv +step +proj=unitconvert +xy_in=rad +xy_out=deg +step +proj=axisswap +order=2,1";
+        if (settings_->source_coordinate_system == "ETRS89" && settings_->target_coordinate_system == "WGS84") {
+            // NovAtel ITRF2008 to ETRF2000 transformation parameters (use as-is for ETRS89->WGS84)
+            // Based on: http://etrs89.ensg.ign.fr/memo-V8.pdf table 5
+            transformation_str = "+proj=pipeline "
+                            "+step +proj=axisswap +order=2,1 "
+                            "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
+                            "+step +proj=cart +ellps=GRS80 "
+                            "+step +proj=helmert +convention=coordinate_frame "
+                            "+x=-0.0533 +y=-0.0505 +z=0.0801 "
+                            "+rx=-0.0000000090320789 +ry=-0.0000000546385019 +rz=0.0000000883136602 "
+                            "+s=0.00230 "
+                            "+dx=-0.0001 +dy=-0.0001 +dz=0.0018 "
+                            "+drx=-0.0000000003926991 +dry=-0.0000000023755870 +drz=0.0000000038397244 "
+                            "+ds=0.00008 "
+                            "+t_epoch=2000.0 "
+                            "+step +proj=cart +ellps=WGS84 +inv "
+                            "+step +proj=unitconvert +xy_in=rad +xy_out=deg "
+                            "+step +proj=axisswap +order=2,1";
+        } else {
+            // Default simple axis swap for other cases
+            transformation_str = "+proj=pipeline +step +proj=axisswap +order=2,1";
         }
         
         // Create transformation object
         proj_transform_ = proj_create(proj_context_, transformation_str.c_str());
         if (!proj_transform_) {
-            node_->log(log_level::ERROR, "Failed to create PROJ transformation: " + std::string(proj_errno_string(proj_errno(proj_transform_))));
+            node_->log(log_level::ERROR, "Failed to create PROJ transformation: " + 
+                    std::string(proj_errno_string(proj_errno(proj_transform_))));
             proj_context_destroy(proj_context_);
             proj_context_ = nullptr;
             return false;
         }
         
-        node_->log(log_level::INFO, "PROJ coordinate transformation initialized: " + 
-                   settings_->source_coordinate_system + " -> " + settings_->target_coordinate_system);
+        node_->log(log_level::INFO, "PROJ coordinate transformation initialized for London: " + 
+                settings_->source_coordinate_system + " -> " + settings_->target_coordinate_system +
+                " (epoch: " + settings_->coordinate_transformation_epoch + ")");
         
         return true;
     }
@@ -3079,16 +3099,7 @@ namespace io {
         // Check for transformation errors
         if (coord_out.lpz.lam == HUGE_VAL || coord_out.lpz.phi == HUGE_VAL) {
             node_->log(log_level::ERROR, "PROJ coordinate transformation failed: " + 
-                       std::string(proj_errno_string(proj_errno(proj_transform_))));
-        }
-        
-        // Transform coordinates
-        coord_out = proj_trans(proj_transform_, PJ_FWD, coord_in);
-        
-        // Check for transformation errors
-        if (coord_out.lpz.lam == HUGE_VAL || coord_out.lpz.phi == HUGE_VAL) {
-            node_->log(log_level::ERROR, "PROJ coordinate transformation failed: " + 
-                       std::string(proj_errno_string(proj_errno(proj_transform_))));
+                    std::string(proj_errno_string(proj_errno(proj_transform_))));
             return false;
         }
         

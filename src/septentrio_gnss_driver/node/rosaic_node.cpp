@@ -342,8 +342,8 @@ namespace rosaic_node {
 
         // Coordinate transformation parameters
         param("coordinate_transformation.enable", settings_.enable_coordinate_transformation, false);
-        param("coordinate_transformation.source_crs", settings_.source_coordinate_system, std::string("ETRF2000"));
-        param("coordinate_transformation.target_crs", settings_.target_coordinate_system, std::string("WGS84"));
+        param("coordinate_transformation.source_coordinate_system", settings_.source_coordinate_system, std::string("ETRS89"));
+        param("coordinate_transformation.target_coordinate_system", settings_.target_coordinate_system, std::string("WGS84"));
         param("coordinate_transformation.epoch", settings_.coordinate_transformation_epoch, std::string("2020.0"));
         
         if (settings_.enable_coordinate_transformation) {

@@ -3,7 +3,7 @@
 # GNSS/INS Parameters
 septentrio_gnss_driver:
   ros__parameters:
-    device: file_name:/apps/output/15-07-25_gps+viewer_test3/septentrio.sbf
+    device: file_name:/data/rigb/16-06-25_viewer_test/output/16-06-25_viewer_test/septentrio.sbf
 
     serial:
       baudrate: 921600
@@ -110,9 +110,9 @@ septentrio_gnss_driver:
 
     coordinate_transformation:
       enable: true
-      source_coordinate_system: "ETRF2000"
+      source_coordinate_system: "ETRS89"
       target_coordinate_system: "WGS84"
-      coordinate_transformation_epoch: "2020.0"    
+      coordinate_transformation_epoch: "2020.0"
 
     publish:
       # For both GNSS and INS Rxs

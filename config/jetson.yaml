@@ -110,9 +110,9 @@ septentrio_gnss_driver:
 
     coordinate_transformation:
       enable: false
-      source_coordinate_system: "ETRF2000"
+      source_coordinate_system: "ETRS89"
       target_coordinate_system: "WGS84"
-      coordinate_transformation_epoch: "2020.0"   
+      coordinate_transformation_epoch: "2020.0"
 
     publish:
       # For both GNSS and INS Rxs
