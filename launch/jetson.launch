@@ -1,0 +1,15 @@
+<launch>
+    <!-- Set config file path (adjust if needed) -->
+    <arg name="gnss_config" default="$(find septentrio_gnss_driver)/config/jetson.yaml"/>
+    <arg name="output_path" default="/apps/output"/>
+
+    <!-- Load YAML config as ROS parameters -->
+    <rosparam file="$(arg gnss_config)" command="load"/>
+
+    <node pkg="septentrio_gnss_driver"
+          type="septentrio_gnss_driver_node"
+          name="septentrio_gnss_driver"
+          output="screen">
+        <param name="output_path" value="$(arg output_path)"/>
+    </node>
+</launch>

@@ -83,7 +83,9 @@
 #include <septentrio_gnss_driver/parsers/nmea_parsers/gpgsv.hpp>
 #include <septentrio_gnss_driver/parsers/nmea_parsers/gprmc.hpp>
 #include <septentrio_gnss_driver/parsers/string_utilities.hpp>
+// Hunter additions for transform & file writing
 #include <proj.h>
+#include <thread>
 
 /**
  * @file message_parser.hpp
