@@ -42,40 +42,113 @@ namespace rosaic_node {
 
     ROSaicNode::ROSaicNode() : IO_(this)
     {
+        param("log_sbf", settings_.log_sbf, false);
+        param("output_path", settings_.output_path, static_cast<std::string>("~/.ros/log"));
         param("activate_debug_log", settings_.activate_debug_log, false);
         if (settings_.activate_debug_log)
         {
             if (ros::console::set_logger_level(
                     ROSCONSOLE_DEFAULT_NAME,
-                    ros::console::levels::Debug)) // debug is lowest level, shows
-                                                  // everything
+                    ros::console::levels::Debug))
                 ros::console::notifyLoggerLevelsChanged();
         }
 
         this->log(log_level::DEBUG, "Called ROSaicNode() constructor..");
 
-        tfListener_ = std::make_unique<tf2_ros::TransformListener>(tfBuffer_);
+        // tfListener_ = std::make_unique<tf2_ros::TransformListener>(tfBuffer_);
 
         // Parameters must be set before initializing IO
         if (!getROSParams())
             return;
 
-        setupThread_ = std::thread(std::bind(&ROSaicNode::setup, this));
+        // Advertise services instead of automatically connecting
+        advertiseServices();
 
         this->log(log_level::DEBUG, "Leaving ROSaicNode() constructor..");
     }
 
     ROSaicNode::~ROSaicNode()
     {
-        IO_.close();
-        if (setupThread_.joinable())
-            setupThread_.join();
+        takedown();
+    }
+
+    void ROSaicNode::advertiseServices()
+    {
+        this->log(log_level::INFO, "Advertising services: start and stop");
+        
+        ros::NodeHandle nh;
+
+        // Advertise the "start" service
+        start_service_ = nh.advertiseService("start", &ROSaicNode::startServiceCallback, this);
+        
+        // Advertise the "stop" service  
+        stop_service_ = nh.advertiseService("stop", &ROSaicNode::stopServiceCallback, this);
+    }
+
+    bool ROSaicNode::startServiceCallback(std_srvs::Trigger::Request& request,
+                                         std_srvs::Trigger::Response& response)
+    {
+        this->log(log_level::INFO, "Received start command");
+        
+        // Check if already connected
+        if (isConnected_) {
+            response.success = false;
+            response.message = "Already connected";
+            return true;
+        }
+        
+        // Start connection in separate thread
+        setupThread_ = std::thread(std::bind(&ROSaicNode::setup, this));
+        
+        response.success = true;
+        response.message = "Connection started";
+        return true;
+    }
+
+    bool ROSaicNode::stopServiceCallback(std_srvs::Trigger::Request& request,
+                                        std_srvs::Trigger::Response& response)
+    {
+        this->log(log_level::INFO, "Received stop command");
+        
+        // Check if already disconnected
+        if (!isConnected_) {
+            response.success = false;
+            response.message = "Already disconnected";
+            return true;
+        }
+        
+        // Close the connection
+        takedown();
+        response.success = true;
+        response.message = "Connection stopped";
+        return true;
     }
 
     void ROSaicNode::setup()
     {
-        // Initializes Connection
-        IO_.connect();
+        log(log_level::INFO, "Connection setup.");
+        if(!isConnected_)
+        {
+            // Initializes Connection
+            IO_.connect();
+            isConnected_ = true;
+            log(log_level::INFO, "Connection established successfully.");
+        }
+    }
+
+    void ROSaicNode::takedown()
+    {
+        log(log_level::INFO, "Takedown called, closing connection...");
+        if(isConnected_)
+        {
+            IO_.close();
+            if (setupThread_.joinable())
+            {
+                setupThread_.join();
+                this->log(log_level::INFO, "Thread Joined");
+            }
+            isConnected_ = false;
+        }
     }
 
     [[nodiscard]] bool ROSaicNode::getROSParams()

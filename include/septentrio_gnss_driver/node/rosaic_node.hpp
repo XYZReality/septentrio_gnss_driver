@@ -135,7 +135,6 @@ namespace rosaic_node {
         std::unique_ptr<tf2_ros::TransformListener> tfListener_;
 
         std::thread setupThread_;
-
         //! Service to start the connection to the receiver
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_service_;
         //! Service to stop the connection to the receiver

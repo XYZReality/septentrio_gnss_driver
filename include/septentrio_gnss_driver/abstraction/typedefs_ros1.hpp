@@ -241,17 +241,23 @@ public:
 
     /**
      * @brief Gets parameter of type T from the parameter server
-     * @param[in] name The key to be used in the parameter server's
-     * dictionary
+     * @param[in] name The key to be used in the parameter server's dictionary
      * @param[out] val Storage for the retrieved value, of type T
-     * @param[in] defaultVal Value to use if the server doesn't contain
-     * this parameter
+     * @param[in] defaultVal Value to use if the server doesn't contain this parameter
      * @return True if it could be retrieved, false if not
      */
     template <typename T>
     bool param(const std::string& name, T& val, const T& defaultVal) const
     {
-        return pNh_->param(name, val, defaultVal);
+        // First try the direct parameter name
+        if (pNh_->param(name, val, defaultVal))
+        {
+            return true;
+        }
+        
+        // If not found, try under ros__parameters namespace (for ROS2 compatibility)
+        std::string ros2_param_name = "ros__parameters/" + name;
+        return pNh_->param(ros2_param_name, val, defaultVal);
     };
 
     /**
