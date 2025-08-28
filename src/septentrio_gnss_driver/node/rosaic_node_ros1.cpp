@@ -79,10 +79,10 @@ namespace rosaic_node {
         ros::NodeHandle nh;
 
         // Advertise the "start" service
-        start_service_ = nh.advertiseService("start", &ROSaicNode::startServiceCallback, this);
+        start_service_ = nh.advertiseService("start_gnss", &ROSaicNode::startServiceCallback, this);
         
         // Advertise the "stop" service  
-        stop_service_ = nh.advertiseService("stop", &ROSaicNode::stopServiceCallback, this);
+        stop_service_ = nh.advertiseService("stop_gnss", &ROSaicNode::stopServiceCallback, this);
     }
 
     bool ROSaicNode::startServiceCallback(std_srvs::Trigger::Request& request,
