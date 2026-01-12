@@ -14,29 +14,25 @@ os.environ['RCUTILS_CONSOLE_OUTPUT_FORMAT'] = '{time}: [{name}] [{severity}]\t{m
 # Start as component:
 
 def generate_launch_description():
-
     tf_imu = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments = "0 0 0 0 0 0 base_link imu".split(' ')
+        arguments=["--frame-id", "base_link", "--child-frame-id", "imu"]
     )
-
     tf_gnss = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments = "0 0 0 0 0 0 imu gnss".split(' ')
+        arguments=["--frame-id", "imu", "--child-frame-id", "gnss"]
     )
-
     tf_vsm = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments = "0 0 0 0 0 0 imu vsm".split(' ')
+        arguments=["--frame-id", "imu", "--child-frame-id", "vsm"]
     )
-
     tf_aux1 = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
-        arguments = "0 0 0 0 0 0 imu aux1".split(' ')
+        arguments=["--frame-id", "imu", "--child-frame-id", "aux1"]
     )
 
     default_file_name = 'rover_node.yaml'

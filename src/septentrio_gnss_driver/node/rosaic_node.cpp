@@ -43,6 +43,8 @@ namespace rosaic_node {
     ROSaicNode::ROSaicNode(const rclcpp::NodeOptions& options) :
         ROSaicNodeBase(options), IO_(this), tfBuffer_(this->get_clock())
     {
+        param("log_sbf", settings_.log_sbf, false);
+        param("output_path", settings_.output_path, static_cast<std::string>("~/.ros/log"));
         param("activate_debug_log", settings_.activate_debug_log, false);
         if (settings_.activate_debug_log)
         {
@@ -58,28 +60,105 @@ namespace rosaic_node {
 
         this->log(log_level::DEBUG, "Called ROSaicNode() constructor..");
 
-        tfListener_ = std::make_unique<tf2_ros::TransformListener>(tfBuffer_);
+        // tfListener_ = std::make_unique<tf2_ros::TransformListener>(tfBuffer_);
 
         // Parameters must be set before initializing IO
         if (!getROSParams())
             return;
-
-        setupThread_ = std::thread(std::bind(&ROSaicNode::setup, this));
-
+        
+        // Advertise services instead of automatically connecting
+        advertiseServices();
+        
         this->log(log_level::DEBUG, "Leaving ROSaicNode() constructor..");
     }
 
     ROSaicNode::~ROSaicNode()
     {
-        IO_.close();
-        if (setupThread_.joinable())
-            setupThread_.join();
+        takedown();
+    }
+
+    void ROSaicNode::advertiseServices()
+    {
+        this->log(log_level::INFO, "Advertising services: start and stop");
+        
+        // Advertise the "start" service
+        start_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "start", std::bind(&ROSaicNode::startServiceCallback, this, 
+            std::placeholders::_1, std::placeholders::_2));
+        
+        // Advertise the "stop" service
+        stop_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "stop", std::bind(&ROSaicNode::stopServiceCallback, this, 
+            std::placeholders::_1, std::placeholders::_2));
+    }
+    
+    void ROSaicNode::startServiceCallback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        
+        this->log(log_level::INFO, "Received start command");
+        
+        // Check if already connected
+        if (isConnected_) {
+            response->success = false;
+            response->message = "Already connected";
+            return;
+        }
+        
+        // Start connection in separate thread
+        setupThread_ = std::thread(std::bind(&ROSaicNode::setup, this));
+        
+        response->success = true;
+        response->message = "Connection started";
+    }
+    
+    void ROSaicNode::stopServiceCallback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        
+        this->log(log_level::INFO, "Received stop command");
+        
+        // Check if already disconnected
+        if (!isConnected_) {
+            response->success = false;
+            response->message = "Already disconnected";
+            return;
+        }
+        
+        // Close the connection
+        takedown();
+        response->success = true;
+        response->message = "Connection stopped";
     }
 
     void ROSaicNode::setup()
     {
-        // Initializes Connection
-        IO_.connect();
+        log(log_level::INFO, "Connection setup.");
+        if(!isConnected_)
+        {
+            // Initializes Connection
+            IO_.connect();
+            isConnected_ = true;
+            log(log_level::INFO, "Connection established successfully.");
+        }
+    }
+
+    void ROSaicNode::takedown()
+    {
+        log(log_level::INFO, "Takedown called, closing connection...");
+        if(isConnected_)
+        {
+            IO_.close();
+            if (setupThread_.joinable())
+            {
+                setupThread_.join();
+                this->log(log_level::INFO, "Thread Joined");
+            }
+
+            isConnected_ = false;
+        }
     }
 
     [[nodiscard]] bool ROSaicNode::getROSParams()
@@ -260,6 +339,18 @@ namespace rosaic_node {
         param("poi_to_arp.delta_u", settings_.delta_u, 0.0f);
 
         param("use_ros_axis_orientation", settings_.use_ros_axis_orientation, true);
+
+        // Coordinate transformation parameters
+        param("coordinate_transformation.enable", settings_.enable_coordinate_transformation, false);
+        param("coordinate_transformation.source_coordinate_system", settings_.source_coordinate_system, std::string("ETRS89"));
+        param("coordinate_transformation.target_coordinate_system", settings_.target_coordinate_system, std::string("WGS84"));
+        param("coordinate_transformation.epoch", settings_.coordinate_transformation_epoch, std::string("2020.0"));
+        
+        if (settings_.enable_coordinate_transformation) {
+            this->log(log_level::INFO, "Coordinate transformation enabled: " + 
+                      settings_.source_coordinate_system + " -> " + settings_.target_coordinate_system + 
+                      " (epoch: " + settings_.coordinate_transformation_epoch + ")");
+        }
 
         // INS Spatial Configuration
         bool getConfigFromTf;
@@ -725,7 +816,7 @@ namespace rosaic_node {
             settings_.device_type = device_type::TCP;
         } else if (boost::regex_match(
                        settings_.device, match,
-                       boost::regex("(file_name):(/|(?:/[\\w-]+)+.sbf)")))
+                       boost::regex("(file_name):(/\\S+\\.sbf)")))
         {
             settings_.read_from_sbf_log = true;
             settings_.use_gnss_time = true;

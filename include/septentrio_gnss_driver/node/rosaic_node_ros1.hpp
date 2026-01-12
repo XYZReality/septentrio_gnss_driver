@@ -67,6 +67,7 @@
 // ROS includes
 #include <ros/console.h>
 #include <ros/ros.h>
+#include <std_srvs/Trigger.h>
 // tf2 includes
 #include <tf2_ros/transform_listener.h>
 // ROSaic includes
@@ -94,6 +95,7 @@ namespace rosaic_node {
 
     private:
         void setup();
+        void takedown();
         /**
          * @brief Gets the node parameters from the ROS Parameter Server, parts of
          * which are specified in a YAML file
@@ -136,5 +138,28 @@ namespace rosaic_node {
         std::unique_ptr<tf2_ros::TransformListener> tfListener_;
 
         std::thread setupThread_;
+        //! Service to start the connection to the receiver
+        ros::ServiceServer start_service_;
+        //! Service to stop the connection to the receiver
+        ros::ServiceServer stop_service_;
+        //! Flag indicating whether the connection to the receiver is active
+        bool isConnected_ = false;
+        
+        /**
+         * @brief Advertises the start and stop services
+         */
+        void advertiseServices();
+        
+        /**
+         * @brief Callback for the start service
+         */
+        bool startServiceCallback(std_srvs::Trigger::Request& request,
+                                 std_srvs::Trigger::Response& response);
+        
+        /**
+         * @brief Callback for the stop service
+         */
+        bool stopServiceCallback(std_srvs::Trigger::Request& request,
+                                std_srvs::Trigger::Response& response);
     };
 } // namespace rosaic_node

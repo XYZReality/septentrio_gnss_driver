@@ -510,7 +510,7 @@ namespace io {
                         {
                             telegramQueue_->push(telegram_);
                         } else
-                            node_->log(log_level::DEBUG,
+                            node_->log(log_level::INFO,
                                        "AsyncManager crc failed for SBF  " +
                                            std::to_string(parsing_utilities::getId(
                                                telegram_->message)) +

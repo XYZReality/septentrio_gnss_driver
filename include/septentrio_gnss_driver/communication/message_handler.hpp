@@ -82,6 +82,9 @@
 #include <septentrio_gnss_driver/parsers/nmea_parsers/gpgsv.hpp>
 #include <septentrio_gnss_driver/parsers/nmea_parsers/gprmc.hpp>
 #include <septentrio_gnss_driver/parsers/string_utilities.hpp>
+// Hunter additions for transform & file writing
+#include <proj.h>
+#include <fstream>  // for std::ofstream
 
 /**
  * @file message_parser.hpp
@@ -152,6 +155,26 @@ namespace io {
         {
         }
 
+        /**
+         * @brief Destructor to ensure file resources are released
+         */
+        ~MessageHandler()
+        {
+            closeSbfOutputFile();
+            cleanupProjection();
+        }
+
+        /**
+         * @brief Opens an SBF file for writing if enabled in settings
+         * @return True if file opened successfully or not needed, false otherwise
+         */
+        bool openSbfOutputFile();
+
+        /**
+         * @brief Closes the SBF output file if open
+         */
+        void closeSbfOutputFile();
+
         void setLeapSeconds()
         {
             // set leap seconds to paramter if reading from file
@@ -206,6 +229,31 @@ namespace io {
          */
         const Settings* settings_;
 
+        /**
+         * @brief SBF output file
+         */
+        std::ofstream sbf_outfile_;
+
+        /**
+         * @brief Queue for storing SBF data for asynchronous writing
+         */
+        ConcurrentQueue<std::vector<uint8_t>> sbf_write_queue_;
+        
+        /**
+         * @brief Thread for handling SBF file writing operations
+         */
+        std::thread sbf_writer_thread_;
+        
+        /**
+         * @brief Flag indicating whether the SBF writer thread is active
+         */
+        std::atomic<bool> sbf_writer_running_{false};
+        
+        /**
+         * @brief Worker function that processes the SBF write queue and writes data to file
+         */
+        void sbfWriterWorker();
+        
         /**
          * @brief Map of NMEA messgae IDs and uint8_t
          */
@@ -445,5 +493,31 @@ namespace io {
          * epoch
          */
         Timestamp timestampSBF(uint32_t tow, uint16_t wnc) const;
+        
+        /**
+         * @brief Transforms coordinates from source to target coordinate system using PROJ
+         * @param[in,out] latitude Latitude in radians (will be modified in-place)
+         * @param[in,out] longitude Longitude in radians (will be modified in-place)
+         * @param[in,out] height Height in meters (will be modified in-place)
+         * @return true if transformation was successful, false otherwise
+         */
+        bool transformCoordinates(double& latitude, double& longitude, double& height) const;
+        
+    private:
+        //! PROJ context for coordinate transformations
+        mutable PJ_CONTEXT* proj_context_ = nullptr;
+        //! PROJ transformation object
+        mutable PJ* proj_transform_ = nullptr;
+        
+        /**
+         * @brief Initialize PROJ transformation
+         * @return true if initialization was successful, false otherwise
+         */
+        bool initializeProjection() const;
+        
+        /**
+         * @brief Cleanup PROJ resources
+         */
+        void cleanupProjection() const;
     };
 } // namespace io

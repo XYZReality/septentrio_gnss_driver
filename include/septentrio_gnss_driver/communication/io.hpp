@@ -377,7 +377,10 @@ namespace io {
             stream_ = std::make_unique<boost::asio::serial_port>(*ioContext_);
         }
 
-        ~SerialIo() { stream_->close(); }
+        ~SerialIo() { 
+            stream_->close(); 
+            node_->log(log_level::INFO, "Serial port closed.");
+        }
 
         void close() { stream_->close(); }
 

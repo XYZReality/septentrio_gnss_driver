@@ -59,6 +59,52 @@ using parsing_utilities::square;
 
 namespace io {
 
+    bool MessageHandler::openSbfOutputFile()
+    {
+        if (settings_->log_sbf)
+        {
+            std::string filename = settings_->output_path + "/septentrio.sbf";
+            sbf_outfile_.open(filename, std::ios::out | std::ios::binary);
+            
+            if (!sbf_outfile_.is_open())
+            {
+                node_->log(log_level::ERROR, "Failed to open SBF output file: " + filename);
+                return false;
+            }
+            
+            // Reset the queue in case it was previously terminated
+            sbf_write_queue_.reset();
+            
+            // Start the writer thread before adding any data to queue
+            sbf_writer_running_ = true;
+            sbf_writer_thread_ = std::thread(&MessageHandler::sbfWriterWorker, this);
+            
+            node_->log(log_level::INFO, "Writing SBF data to file: " + filename);
+        }
+        return true;
+    }
+
+    void MessageHandler::closeSbfOutputFile()
+    {
+        // Signal the writer thread to stop
+        sbf_writer_running_ = false;
+        
+        // Terminate the queue to wake up the writer thread
+        sbf_write_queue_.terminate();
+        
+        // Wait for thread to finish
+        if (sbf_writer_thread_.joinable()) {
+            sbf_writer_thread_.join();
+        }
+        
+        // Close file
+        if (sbf_outfile_.is_open())
+        {
+            sbf_outfile_.close();
+            node_->log(log_level::INFO, "Closed SBF output file");
+        }
+    }
+
     void MessageHandler::assemblePoseWithCovarianceStamped()
     {
         if (!settings_->publish_pose)
@@ -2240,10 +2286,65 @@ namespace io {
         }
     }
 
+    void MessageHandler::sbfWriterWorker()
+    {
+        node_->log(log_level::INFO, "SBF file writer thread started");
+        
+        std::vector<uint8_t> message_data;
+        
+        while (sbf_writer_running_) {
+            // Try to pop a message from the queue
+            if (sbf_write_queue_.pop(message_data)) {
+                // Write data to file
+                if (sbf_outfile_.is_open()) {
+                    sbf_outfile_.write(reinterpret_cast<const char*>(message_data.data()), 
+                                    message_data.size());
+                    
+                    // Flush periodically (every 10 messages)
+                    static int flush_counter = 0;
+                    if (++flush_counter >= 10) {
+                        sbf_outfile_.flush();
+                        flush_counter = 0;
+                    }
+                }
+            } else {
+                // pop() returned false, meaning the queue was terminated
+                break;
+            }
+        }
+        
+        // Process any remaining messages in the queue
+        while (sbf_write_queue_.pop(message_data)) {
+            if (sbf_outfile_.is_open()) {
+                sbf_outfile_.write(reinterpret_cast<const char*>(message_data.data()), 
+                                message_data.size());
+            }
+        }
+        
+        // Final flush to ensure all data is written
+        if (sbf_outfile_.is_open()) {
+            sbf_outfile_.flush();
+        }
+        
+        node_->log(log_level::INFO, "SBF file writer thread stopped");
+    }
+
     void MessageHandler::parseSbf(const std::shared_ptr<Telegram>& telegram)
     {
+        // One-time initialization of output file if needed
+        static bool file_initialized = false;
+        if (!file_initialized && settings_->log_sbf) {
+            openSbfOutputFile();
+            file_initialized = true;
+        }
 
         uint16_t sbfId = parsing_utilities::getId(telegram->message);
+
+        // Queue telegram for asynchronous file writing if enabled
+        if (settings_->log_sbf && sbf_writer_running_) {
+            // Push a copy to the queue and let the worker thread handle file writing
+            sbf_write_queue_.push(telegram->message);
+        }
 
         /*node_->log(log_level::DEBUG, "ROSaic reading SBF block " +
                                         std::to_string(sbfId) + " made up of " +
@@ -2278,6 +2379,25 @@ namespace io {
                 node_->log(log_level::ERROR, "parse error in PVTGeodetic");
                 break;
             }
+            
+            // Apply coordinate transformation if enabled
+            if (settings_->enable_coordinate_transformation) {
+                double lat = last_pvtgeodetic_.latitude;
+                double lon = last_pvtgeodetic_.longitude;
+                double height = last_pvtgeodetic_.height;
+                
+                if (transformCoordinates(lat, lon, height)) {
+                    last_pvtgeodetic_.latitude = lat;
+                    last_pvtgeodetic_.longitude = lon;
+                    last_pvtgeodetic_.height = height;
+                    
+                    node_->log(log_level::DEBUG, "Coordinate transformation applied: " +
+                               settings_->source_coordinate_system + " -> " + settings_->target_coordinate_system);
+                } else {
+                    node_->log(log_level::WARN, "Coordinate transformation failed, using original coordinates");
+                }
+            }
+            
             assembleHeader(settings_->frame_id, telegram, last_pvtgeodetic_);
             if (settings_->publish_pvtgeodetic)
                 publish<PVTGeodeticMsg>("pvtgeodetic", last_pvtgeodetic_);
@@ -2982,6 +3102,117 @@ namespace io {
         {
             node_->log(log_level::DEBUG, "Unknown NMEA message: " + body[0]);
         }
+    }
+
+    bool MessageHandler::initializeProjection() const
+    {
+        if (!settings_->enable_coordinate_transformation) {
+            return true; // No transformation needed
+        }
+        
+        if (proj_context_ && proj_transform_) {
+            return true; // Already initialized
+        }
+        
+        // Initialize PROJ context
+        proj_context_ = proj_context_create();
+        if (!proj_context_) {
+            node_->log(log_level::ERROR, "Failed to create PROJ context");
+            return false;
+        }
+        
+        // For London (UK), use proper EPSG transformation
+        // ETRS89 (EPSG:4258) to WGS84 (EPSG:4326) with epoch handling
+        std::string transformation_str;
+        
+        if (settings_->source_coordinate_system == "ETRS89" && settings_->target_coordinate_system == "WGS84") {
+            // NovAtel ITRF2008 to ETRF2000 transformation parameters (use as-is for ETRS89->WGS84)
+            // Based on: http://etrs89.ensg.ign.fr/memo-V8.pdf table 5
+            transformation_str = "+proj=pipeline "
+                            "+step +proj=axisswap +order=2,1 "
+                            "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
+                            "+step +proj=cart +ellps=GRS80 "
+                            "+step +proj=helmert +convention=coordinate_frame "
+                            "+x=-0.0533 +y=-0.0505 +z=0.0801 "
+                            "+rx=-0.0000000090320789 +ry=-0.0000000546385019 +rz=0.0000000883136602 "
+                            "+s=0.00230 "
+                            "+dx=-0.0001 +dy=-0.0001 +dz=0.0018 "
+                            "+drx=-0.0000000003926991 +dry=-0.0000000023755870 +drz=0.0000000038397244 "
+                            "+ds=0.00008 "
+                            "+t_epoch=2000.0 "
+                            "+step +proj=cart +ellps=WGS84 +inv "
+                            "+step +proj=unitconvert +xy_in=rad +xy_out=deg "
+                            "+step +proj=axisswap +order=2,1";
+        } else {
+            // Default simple axis swap for other cases
+            transformation_str = "+proj=pipeline +step +proj=axisswap +order=2,1";
+        }
+        
+        // Create transformation object
+        proj_transform_ = proj_create(proj_context_, transformation_str.c_str());
+        if (!proj_transform_) {
+            node_->log(log_level::ERROR, "Failed to create PROJ transformation: " + 
+                    std::string(proj_errno_string(proj_errno(proj_transform_))));
+            proj_context_destroy(proj_context_);
+            proj_context_ = nullptr;
+            return false;
+        }
+        
+        node_->log(log_level::INFO, "PROJ coordinate transformation initialized for London: " + 
+                settings_->source_coordinate_system + " -> " + settings_->target_coordinate_system +
+                " (epoch: " + settings_->coordinate_transformation_epoch + ")");
+        
+        return true;
+    }
+
+    void MessageHandler::cleanupProjection() const
+    {
+        if (proj_transform_) {
+            proj_destroy(proj_transform_);
+            proj_transform_ = nullptr;
+        }
+        if (proj_context_) {
+            proj_context_destroy(proj_context_);
+            proj_context_ = nullptr;
+        }
+    }
+
+    bool MessageHandler::transformCoordinates(double& latitude, double& longitude, double& height) const
+    {
+        if (!settings_->enable_coordinate_transformation) {
+            return true; // No transformation needed
+        }
+        
+        if (!initializeProjection()) {
+            return false;
+        }
+        
+        // Convert from radians to degrees for PROJ
+        double lat_deg = latitude * 180.0 / M_PI;
+        double lon_deg = longitude * 180.0 / M_PI;
+        
+        // Create coordinate array
+        PJ_COORD coord_in, coord_out;
+        coord_in.lpz.lam = lon_deg;  // longitude
+        coord_in.lpz.phi = lat_deg;  // latitude
+        coord_in.lpz.z = height;     // height
+        
+        // Transform coordinates
+        coord_out = proj_trans(proj_transform_, PJ_FWD, coord_in);
+        
+        // Check for transformation errors
+        if (coord_out.lpz.lam == HUGE_VAL || coord_out.lpz.phi == HUGE_VAL) {
+            node_->log(log_level::ERROR, "PROJ coordinate transformation failed: " + 
+                    std::string(proj_errno_string(proj_errno(proj_transform_))));
+            return false;
+        }
+        
+        // Convert back to radians and update the input variables
+        latitude = coord_out.lpz.phi * M_PI / 180.0;
+        longitude = coord_out.lpz.lam * M_PI / 180.0;
+        height = coord_out.lpz.z;
+        
+        return true;
     }
 
 } // namespace io

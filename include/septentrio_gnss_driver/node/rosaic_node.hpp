@@ -92,6 +92,7 @@ namespace rosaic_node {
 
     private:
         void setup();
+        void takedown();
         /**
          * @brief Gets the node parameters from the ROS Parameter Server, parts of
          * which are specified in a YAML file
@@ -134,5 +135,43 @@ namespace rosaic_node {
         std::unique_ptr<tf2_ros::TransformListener> tfListener_;
 
         std::thread setupThread_;
+        //! Service to start the connection to the receiver
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_service_;
+        //! Service to stop the connection to the receiver
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
+        //! Flag indicating whether the connection to the receiver is active
+        bool isConnected_ = false;
+        
+        /**
+         * @brief Advertises the start and stop services
+         * 
+         * This is called during node initialization to create the services
+         * that control the connection to the receiver.
+         */
+        void advertiseServices();
+        
+        /**
+         * @brief Callback for the start service
+         * 
+         * Initiates the connection to the receiver when triggered.
+         * 
+         * @param[in] request The service request (empty for Trigger)
+         * @param[out] response The service response with success status and message
+         */
+        void startServiceCallback(
+            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+        
+        /**
+         * @brief Callback for the stop service
+         * 
+         * Closes the connection to the receiver when triggered.
+         * 
+         * @param[in] request The service request (empty for Trigger)
+         * @param[out] response The service response with success status and message
+         */
+        void stopServiceCallback(
+            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     };
 } // namespace rosaic_node
