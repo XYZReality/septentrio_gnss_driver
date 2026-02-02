@@ -85,6 +85,7 @@
 // Hunter additions for transform & file writing
 #include <proj.h>
 #include <fstream>  // for std::ofstream
+#include <thread>
 
 /**
  * @file message_parser.hpp
