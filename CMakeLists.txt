@@ -181,6 +181,7 @@ elseif(ament_cmake_FOUND)
     "${CMAKE_CURRENT_SOURCE_DIR}/msg_ros2:msg/GpsNav.msg"
     "${CMAKE_CURRENT_SOURCE_DIR}/msg_ros2:msg/GalNav.msg"
     "${CMAKE_CURRENT_SOURCE_DIR}/msg_ros2:msg/BdsNav.msg"
+    "${CMAKE_CURRENT_SOURCE_DIR}/msg_ros2:msg/ExcludeSatellites.msg"
     "msg/GALAuthStatus.msg"
     "msg/RFBand.msg"
     "msg/RFStatus.msg"

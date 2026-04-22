@@ -71,6 +71,7 @@
 #include <septentrio_gnss_driver/msg/gal_nav.hpp>
 #include <septentrio_gnss_driver/msg/bds_nav.hpp>
 #include <septentrio_gnss_driver/msg/gps_nav.hpp>
+#include <septentrio_gnss_driver/msg/exclude_satellites.hpp>
 #include <septentrio_gnss_driver/msg/meas_epoch.hpp>
 #include <septentrio_gnss_driver/msg/meas_epoch_channel_type1.hpp>
 #include <septentrio_gnss_driver/msg/meas_epoch_channel_type2.hpp>
@@ -131,6 +132,7 @@ typedef septentrio_gnss_driver::msg::GALAuthStatus GalAuthStatusMsg;
 typedef septentrio_gnss_driver::msg::GpsNav GpsNavMsg;
 typedef septentrio_gnss_driver::msg::GalNav GalNavMsg;
 typedef septentrio_gnss_driver::msg::BdsNav BdsNavMsg;
+typedef septentrio_gnss_driver::msg::ExcludeSatellites ExcludeSatellitesMsg;
 typedef septentrio_gnss_driver::msg::RFStatus RfStatusMsg;
 typedef septentrio_gnss_driver::msg::RFBand RfBandMsg;
 typedef septentrio_gnss_driver::msg::MeasEpoch MeasEpochMsg;

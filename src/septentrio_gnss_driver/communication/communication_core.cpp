@@ -1052,6 +1052,41 @@ namespace io {
         }
     }
 
+    void CommunicationCore::sendSatelliteExclusion(
+        const std::vector<std::string>& include_ids,
+        const std::vector<std::string>& exclude_ids)
+    {
+        // Step 1: if include_ids provided, send a reset/allow command first.
+        // e.g.  ssu, all<CR>  or  ssu, G01+G02+...<CR>
+        if (!include_ids.empty())
+        {
+            std::string cmd = "ssu, ";
+            for (size_t i = 0; i < include_ids.size(); ++i)
+            {
+                if (i > 0)
+                    cmd += '+';
+                cmd += include_ids[i];
+            }
+            cmd += "\x0D"; // CR terminator required by mosaic-X5
+            node_->log(log_level::DEBUG,
+                       "Sending satellite include command: " + cmd);
+            send(cmd);
+        }
+
+        // Step 2: if exclude_ids provided, remove each from PVT usage.
+        // e.g.  ssu, -G03-E07<CR>
+        if (!exclude_ids.empty())
+        {
+            std::string cmd = "ssu, ";
+            for (const auto& id : exclude_ids)
+                cmd += '-' + id;
+            cmd += "\x0D";
+            node_->log(log_level::DEBUG,
+                       "Sending satellite exclude command: " + cmd);
+            send(cmd);
+        }
+    }
+
     std::string CommunicationCore::resetMainConnection()
     {
         // Escape sequence (escape from correction mode), ensuring that we
