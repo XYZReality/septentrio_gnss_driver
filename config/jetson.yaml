@@ -139,6 +139,9 @@ septentrio_gnss_driver:
       diagnostics: false
       aimplusstatus: false
       galauthstatus: false
+      gpsnav: true
+      galnav: true
+      bdsnav: true
       # For GNSS Rx only
       gpgsa: false
       gpgsv: false

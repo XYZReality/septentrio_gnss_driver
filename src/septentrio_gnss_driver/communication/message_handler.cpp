@@ -2928,6 +2928,57 @@ namespace io {
             current_leap_seconds_ = msg.delta_ls;
             break;
         }
+        case GPS_NAV:
+        {
+            if (settings_->publish_gpsnav)
+            {
+                GpsNavMsg msg;
+
+                if (!GPSNavParser(node_, telegram->message.begin(),
+                                  telegram->message.end(), msg))
+                {
+                    node_->log(log_level::ERROR, "parse error in GPSNav");
+                    break;
+                }
+                assembleHeader(settings_->frame_id, telegram, msg);
+                publish<GpsNavMsg>("gpsnav", msg);
+            }
+            break;
+        }
+        case GAL_NAV:
+        {
+            if (settings_->publish_galnav)
+            {
+                GalNavMsg msg;
+
+                if (!GALNavParser(node_, telegram->message.begin(),
+                                  telegram->message.end(), msg))
+                {
+                    node_->log(log_level::ERROR, "parse error in GALNav");
+                    break;
+                }
+                assembleHeader(settings_->frame_id, telegram, msg);
+                publish<GalNavMsg>("galnav", msg);
+            }
+            break;
+        }
+        case BDS_NAV:
+        {
+            if (settings_->publish_bdsnav)
+            {
+                BdsNavMsg msg;
+
+                if (!BDSNavParser(node_, telegram->message.begin(),
+                                  telegram->message.end(), msg))
+                {
+                    node_->log(log_level::ERROR, "parse error in BDSNav");
+                    break;
+                }
+                assembleHeader(settings_->frame_id, telegram, msg);
+                publish<BdsNavMsg>("bdsnav", msg);
+            }
+            break;
+        }
         default:
         {
             node_->log(log_level::DEBUG, "unhandled SBF block " +

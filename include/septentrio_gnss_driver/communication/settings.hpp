@@ -274,6 +274,12 @@ struct Settings
     bool publish_aimplusstatus;
     //! Whether or not to publish the GALAuthStatus message and diagnostics
     bool publish_galauthstatus;
+    //! Whether or not to publish the GpsNav (GPS broadcast ephemeris) message
+    bool publish_gpsnav;
+    //! Whether or not to publish the GalNav (Galileo broadcast ephemeris) message
+    bool publish_galnav;
+    //! Whether or not to publish the BdsNav (BeiDou broadcast ephemeris) message
+    bool publish_bdsnav;
     //! Whether or not to publish the PVTCartesianMsg
     //! message
     bool publish_pvtcartesian;

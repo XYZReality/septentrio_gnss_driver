@@ -135,7 +135,10 @@ enum SbfId
     EXT_SENSOR_MEAS = 4050,
     RECEIVER_TIME = 5914,
     GAL_AUTH_STATUS = 4245,
-    RF_STATUS = 4092
+    RF_STATUS = 4092,
+    GPS_NAV = 5891,
+    GAL_NAV = 4002,
+    BDS_NAV = 4081
 };
 
 namespace io {

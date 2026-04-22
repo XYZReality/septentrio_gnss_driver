@@ -178,6 +178,9 @@ namespace settings {
             settings.publish_diagnostics = true;
             settings.publish_aimplusstatus = true;
             settings.publish_galauthstatus = true;
+            settings.publish_gpsnav = true;
+            settings.publish_galnav = true;
+            settings.publish_bdsnav = true;
             settings.publish_gpgga = true;
             settings.publish_gprmc = true;
             settings.publish_gpgsa = true;
