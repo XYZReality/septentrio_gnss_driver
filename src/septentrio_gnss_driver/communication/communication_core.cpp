@@ -87,6 +87,14 @@ namespace io {
         resetSettings();
 
         manager_->close();
+
+        // In file replay, dump the queue and then push one EMPTY telegram for the blocking pop()
+        if (settings_->read_from_sbf_log || settings_->read_from_pcap)
+        {
+            running_ = false;
+            telegramQueue_.reset();
+            telegramQueue_.push(std::make_shared<Telegram>());
+        }
     }
 
     void CommunicationCore::resetSettings()
@@ -187,6 +195,11 @@ namespace io {
         node_->log(
             log_level::DEBUG,
             "Started timer for calling connect() method until connection succeeds");
+
+        // Seed leap seconds from YAML before any SBF blocks are processed.
+        // This ensures timestamps are valid from the very first block when
+        // playing back an SBF file that has no ReceiverTime block at the start.
+        telegramHandler_.setLeapSeconds();
 
         boost::asio::io_context io;
         if (initializeIo())

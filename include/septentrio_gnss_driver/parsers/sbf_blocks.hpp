@@ -1105,12 +1105,13 @@ template <typename It>
     qiLittleEndianParser(it, msg.wnt_oc);
     qiLittleEndianParser(it, msg.iodnav);
     qiLittleEndianParser(it, msg.health_ossol);
+    std::advance(it, 1); // Health_PRS (u1) — not in GalNavMsg, skip
     qiLittleEndianParser(it, msg.sisa_l1e5a);
     qiLittleEndianParser(it, msg.sisa_l1e5b);
     std::advance(it, 1); // SISA_L1AE6A (reserved)
     qiLittleEndianParser(it, msg.bgd_l1e5a);
     qiLittleEndianParser(it, msg.bgd_l1e5b);
-    std::advance(it, 4); // BGD_L1AE6A (reserved) + CNAVenc
+    std::advance(it, 5); // BGD_L1AE6A (f4, reserved) + CNAVenc (u1)
     if (it > itEnd)
     {
         node->log(log_level::ERROR, "Parse error: iterator past end.");

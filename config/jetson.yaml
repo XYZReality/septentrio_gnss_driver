@@ -4,7 +4,7 @@
 septentrio_gnss_driver:
   ros__parameters:
     device: serial:/dev/ttyACM1
-    # device: file_name:/apps/output/01-04-25_gps_test3/log.sbf
+    # device: file_name:/data/dls/20260415_gps-fig8x2+line/septentrio.sbf
 
     serial:
       baudrate: 921600
@@ -76,6 +76,7 @@ septentrio_gnss_driver:
 
     # time
     use_gnss_time: false
+    leap_seconds: 18
     ntp_server: true
     ptp_server_clock: false
     latency_compensation: true
@@ -123,7 +124,7 @@ septentrio_gnss_driver:
       gpgga: false
       gprmc: false
       gpst: false
-      measepoch: false
+      measepoch: true
       pvtcartesian: false
       pvtgeodetic: true
       basevectorcart: false

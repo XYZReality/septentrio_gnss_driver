@@ -31,6 +31,7 @@
 #include <GeographicLib/UTMUPS.hpp>
 #include <boost/tokenizer.hpp>
 #include <septentrio_gnss_driver/communication/message_handler.hpp>
+#include <septentrio_gnss_driver/parsers/sbf_raw_decode.hpp>
 #include <thread>
 
 /**
@@ -2979,6 +2980,128 @@ namespace io {
             }
             break;
         }
+        // ----------------------------------------------------------------
+        // Raw navigation subframe blocks — accumulate and decode in-driver
+        // ----------------------------------------------------------------
+        case GPS_RAW_CA:
+        {
+            if (settings_->publish_gpsnav)
+            {
+                const auto& data = telegram->message;
+                // Min size: 14 (SBF hdr) + 6 (sub-block hdr) + 40 (10×u32)
+                if (data.size() < 60) break;
+                uint8_t  svid       = data[14];
+                uint8_t  crc_passed = data[15];
+                if (!crc_passed) break;
+                int prn = static_cast<int>(svid);
+                if (prn < 1 || prn > 32) break;
+                uint16_t wnc = static_cast<uint16_t>(
+                    data[12] | (static_cast<uint16_t>(data[13]) << 8));
+                const uint8_t* navbits = data.data() + 20; // skip 14-hdr + 6-subhdr
+                if (sbf_raw::gps_sf_accumulate(
+                        gps_sf_buf_[prn - 1], gps_sf_rx_[prn - 1], navbits))
+                {
+                    GpsNavMsg msg;
+                    sbf_raw::gps_decode_nav_msg(
+                        gps_sf_buf_[prn - 1],
+                        static_cast<uint8_t>(prn), wnc, msg);
+                    gps_sf_rx_[prn - 1] = 0; // reset after decode
+                    assembleHeader(settings_->frame_id, telegram, msg);
+                    publish<GpsNavMsg>("gpsnav", msg);
+                }
+            }
+            break;
+        }
+        case GAL_RAW_INAV:
+        {
+            if (settings_->publish_galnav)
+            {
+                const auto& data = telegram->message;
+                // Min size: 14 + 6 + 32 (8×u32) = 52
+                if (data.size() < 52) break;
+                uint8_t  svid       = data[14];
+                uint8_t  crc_passed = data[15];
+                if (!crc_passed) break;
+                if (svid < 71 || svid > 106) break; // Galileo SVID range
+                int idx = static_cast<int>(svid) - 71; // 0-based index
+                uint16_t wnc = static_cast<uint16_t>(
+                    data[12] | (static_cast<uint16_t>(data[13]) << 8));
+                const uint8_t* navbits = data.data() + 20;
+                if (sbf_raw::gal_inav_accumulate(
+                        gal_inav_buf_[idx], gal_inav_rx_[idx], navbits))
+                {
+                    GalNavMsg msg;
+                    if (sbf_raw::gal_inav_decode_nav_msg(
+                            gal_inav_buf_[idx], svid, wnc, msg))
+                    {
+                        gal_inav_rx_[idx] = 0; // reset after decode
+                        assembleHeader(settings_->frame_id, telegram, msg);
+                        publish<GalNavMsg>("galnav", msg);
+                    }
+                }
+            }
+            break;
+        }
+        case GAL_RAW_FNAV:
+        {
+            if (settings_->publish_galnav)
+            {
+                const auto& data = telegram->message;
+                if (data.size() < 52) break;
+                uint8_t  svid       = data[14];
+                uint8_t  crc_passed = data[15];
+                if (!crc_passed) break;
+                if (svid < 71 || svid > 106) break;
+                int idx = static_cast<int>(svid) - 71;
+                uint16_t wnc = static_cast<uint16_t>(
+                    data[12] | (static_cast<uint16_t>(data[13]) << 8));
+                const uint8_t* navbits = data.data() + 20;
+                if (sbf_raw::gal_fnav_accumulate(
+                        gal_fnav_buf_[idx], gal_fnav_rx_[idx], navbits))
+                {
+                    GalNavMsg msg;
+                    if (sbf_raw::gal_fnav_decode_nav_msg(
+                            gal_fnav_buf_[idx], svid, wnc, msg))
+                    {
+                        gal_fnav_rx_[idx] = 0;
+                        assembleHeader(settings_->frame_id, telegram, msg);
+                        publish<GalNavMsg>("galnav", msg);
+                    }
+                }
+            }
+            break;
+        }
+        case BDS_RAW:
+        {
+            if (settings_->publish_bdsnav)
+            {
+                const auto& data = telegram->message;
+                // Min size: 14 + 6 + 40 (10×u32) = 60
+                if (data.size() < 60) break;
+                uint8_t  svid       = data[14];
+                uint8_t  crc_passed = data[15];
+                if (!crc_passed) break;
+                if (svid < 161 || svid > 223) break; // BDS SVID range
+                int idx = static_cast<int>(svid) - 161; // 0-based
+                uint8_t  prn = static_cast<uint8_t>(svid - 160); // BDS PRN 1-63
+                uint16_t wnc = static_cast<uint16_t>(
+                    data[12] | (static_cast<uint16_t>(data[13]) << 8));
+                const uint8_t* navbits = data.data() + 20;
+                if (sbf_raw::bds_d1_accumulate(
+                        bds_d1_buf_[idx], bds_d1_rx_[idx], navbits))
+                {
+                    BdsNavMsg msg;
+                    if (sbf_raw::bds_d1_decode_nav_msg(
+                            bds_d1_buf_[idx], prn, wnc, msg))
+                    {
+                        bds_d1_rx_[idx] = 0;
+                        assembleHeader(settings_->frame_id, telegram, msg);
+                        publish<BdsNavMsg>("bdsnav", msg);
+                    }
+                }
+            }
+            break;
+        }
         default:
         {
             node_->log(log_level::DEBUG, "unhandled SBF block " +
@@ -2997,11 +3120,26 @@ namespace io {
         {
             auto sleep_nsec = unix_time_ - unix_old;
 
-            std::stringstream ss;
-            ss << "Waiting for " << sleep_nsec / 1000000 << " milliseconds...";
-            node_->log(log_level::DEBUG, ss.str());
+            // Cap sleep to 1 second so that time gaps in the SBF file
+            // (e.g. two concatenated recording sessions) don't stall replay.
+            static constexpr Timestamp kMaxSleepNsec = 1'000'000'000ULL; // 1 s
+            if (sleep_nsec > kMaxSleepNsec)
+            {
+                node_->log(log_level::WARN,
+                           "SBF file time gap of " +
+                               std::to_string(sleep_nsec / 1'000'000'000ULL) +
+                               " s detected, skipping wait.");
+                sleep_nsec = 0;
+            }
 
-            std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_nsec));
+            if (sleep_nsec > 0)
+            {
+                std::stringstream ss;
+                ss << "Waiting for " << sleep_nsec / 1000000 << " milliseconds...";
+                node_->log(log_level::DEBUG, ss.str());
+
+                std::this_thread::sleep_for(std::chrono::nanoseconds(sleep_nsec));
+            }
         }
     }
 
