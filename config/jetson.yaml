@@ -75,7 +75,7 @@ septentrio_gnss_driver:
       rest: 500
 
     # time
-    use_gnss_time: false
+    use_gnss_time: true
     leap_seconds: 18
     ntp_server: true
     ptp_server_clock: false

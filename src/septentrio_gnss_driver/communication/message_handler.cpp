@@ -3006,6 +3006,8 @@ namespace io {
                         gps_sf_buf_[prn - 1],
                         static_cast<uint8_t>(prn), wnc, msg);
                     gps_sf_rx_[prn - 1] = 0; // reset after decode
+                    auto bh_it = data.cbegin();
+                    (void)BlockHeaderParser(node_, bh_it, msg.block_header);
                     assembleHeader(settings_->frame_id, telegram, msg);
                     publish<GpsNavMsg>("gpsnav", msg);
                 }
@@ -3035,6 +3037,8 @@ namespace io {
                             gal_inav_buf_[idx], svid, wnc, msg))
                     {
                         gal_inav_rx_[idx] = 0; // reset after decode
+                        auto bh_it = data.cbegin();
+                        (void)BlockHeaderParser(node_, bh_it, msg.block_header);
                         assembleHeader(settings_->frame_id, telegram, msg);
                         publish<GalNavMsg>("galnav", msg);
                     }
@@ -3064,6 +3068,8 @@ namespace io {
                             gal_fnav_buf_[idx], svid, wnc, msg))
                     {
                         gal_fnav_rx_[idx] = 0;
+                        auto bh_it = data.cbegin();
+                        (void)BlockHeaderParser(node_, bh_it, msg.block_header);
                         assembleHeader(settings_->frame_id, telegram, msg);
                         publish<GalNavMsg>("galnav", msg);
                     }
@@ -3081,9 +3087,16 @@ namespace io {
                 uint8_t  svid       = data[14];
                 uint8_t  crc_passed = data[15];
                 if (!crc_passed) break;
-                if (svid < 161 || svid > 223) break; // BDS SVID range
-                int idx = static_cast<int>(svid) - 161; // 0-based
-                uint8_t  prn = static_cast<uint8_t>(svid - 160); // BDS PRN 1-63
+                // BDS SVID ranges per Septentrio ref guide sec 4.1.9:
+                //   141-180 -> C01-C40  (PRN = svid - 140)
+                //   223-245 -> C41-C63  (PRN = svid - 182)
+                bool bds_range1 = (svid >= 141 && svid <= 180);
+                bool bds_range2 = (svid >= 223 && svid <= 245);
+                if (!bds_range1 && !bds_range2) break;
+                int idx = bds_range1 ? (static_cast<int>(svid) - 141)
+                                     : (static_cast<int>(svid) - 183); // 0-based, max 62
+                uint8_t prn = bds_range1 ? static_cast<uint8_t>(svid - 140)
+                                         : static_cast<uint8_t>(svid - 182);
                 uint16_t wnc = static_cast<uint16_t>(
                     data[12] | (static_cast<uint16_t>(data[13]) << 8));
                 const uint8_t* navbits = data.data() + 20;
@@ -3095,6 +3108,8 @@ namespace io {
                             bds_d1_buf_[idx], prn, wnc, msg))
                     {
                         bds_d1_rx_[idx] = 0;
+                        auto bh_it = data.cbegin();
+                        (void)BlockHeaderParser(node_, bh_it, msg.block_header);
                         assembleHeader(settings_->frame_id, telegram, msg);
                         publish<BdsNavMsg>("bdsnav", msg);
                     }

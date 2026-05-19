@@ -1140,6 +1140,13 @@ template <typename It>
         return false;
     }
     qiLittleEndianParser(it, msg.prn);
+    // Convert Septentrio SVID encoding (sec 4.1.9) to BDS PRN:
+    //   141-180 -> C01-C40 (PRN = svid - 140)
+    //   223-245 -> C41-C63 (PRN = svid - 182)
+    if (msg.prn >= 141 && msg.prn <= 180)
+        msg.prn = static_cast<uint8_t>(msg.prn - 140);
+    else if (msg.prn >= 223 && msg.prn <= 245)
+        msg.prn = static_cast<uint8_t>(msg.prn - 182);
     std::advance(it, 1); // reserved
     qiLittleEndianParser(it, msg.wn);
     qiLittleEndianParser(it, msg.ura);
