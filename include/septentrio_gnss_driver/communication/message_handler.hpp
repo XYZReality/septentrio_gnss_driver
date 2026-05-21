@@ -195,8 +195,9 @@ namespace io {
 
         void setLeapSeconds()
         {
-            // set leap seconds to paramter if reading from file
-            if (settings_->read_from_sbf_log || settings_->read_from_pcap)
+            // Seed from config if provided; live connections rely on this until
+            // the receiver delivers a ReceiverTime block with the actual delta_ls.
+            if (settings_->leap_seconds != -128)
                 current_leap_seconds_ = settings_->leap_seconds;
         }
 
