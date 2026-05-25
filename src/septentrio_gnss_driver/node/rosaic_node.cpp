@@ -93,11 +93,11 @@ namespace rosaic_node {
 
         // Subscribe to satellite exclusion commands from the filter node
         exclude_sv_sub_ = this->create_subscription<ExcludeSatellitesMsg>(
-            "gnss/exclude_satellites", 10,
+            "/sgps/exclude_satellites", 10,
             std::bind(&ROSaicNode::excludeSatellitesCallback, this,
                       std::placeholders::_1));
         this->log(log_level::INFO,
-                  "Subscribed to gnss/exclude_satellites for PVT satellite exclusion");
+                  "Subscribed to /sgps/exclude_satellites for PVT satellite exclusion");
     }
     
     void ROSaicNode::startServiceCallback(
