@@ -195,8 +195,7 @@ namespace io {
 
         void setLeapSeconds()
         {
-            // Seed from config if provided; live connections rely on this until
-            // the receiver delivers a ReceiverTime block with the actual delta_ls.
+            // Fallback only; the receiver's ReceiverTime block overrides this.
             if (settings_->leap_seconds != -128)
                 current_leap_seconds_ = settings_->leap_seconds;
         }
@@ -214,6 +213,13 @@ namespace io {
         void parseNmea(const std::shared_ptr<Telegram>& telegram);
 
     private:
+        /**
+         * @brief Whether to write this SBF block to the log. Latches on once the
+         * stream time reaches the host clock, skipping the receiver's buffered
+         * replay at connect.
+         */
+        bool sbfStreamIsLive(const std::shared_ptr<Telegram>& telegram);
+
         /**
          * @brief Header assembling
          * @param[in] frameId String of frame ID
@@ -404,6 +410,18 @@ namespace io {
 
         //! Current leap seconds as received, do not use value is -128
         int32_t current_leap_seconds_ = -128;
+
+        //! True once leap seconds came from a receiver ReceiverTime block
+        bool leap_seconds_from_receiver_ = false;
+
+        //! Latch so the missing-ReceiverTime warning is logged only once
+        bool fallback_leap_seconds_warned_ = false;
+
+        //! Once true, SBF logging is on for the session (skips connect replay)
+        bool sbf_log_latched_ = false;
+
+        //! Blocks seen before the SBF log latched on (escape hatch)
+        uint32_t sbf_pre_latch_blocks_ = 0;
 
         /**
          * @brief Set status of NavSatFix messages

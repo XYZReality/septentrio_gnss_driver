@@ -2238,6 +2238,18 @@ namespace io {
         if (!settings_->use_gnss_time ||
             (settings_->use_gnss_time && (current_leap_seconds_ != -128)))
         {
+            // Warn once if stamping with GNSS time using the config fallback
+            // because the receiver never sent a ReceiverTime block.
+            if (settings_->use_gnss_time && !leap_seconds_from_receiver_ &&
+                !fallback_leap_seconds_warned_ &&
+                !settings_->read_from_sbf_log && !settings_->read_from_pcap)
+            {
+                node_->log(log_level::WARN,
+                           "No ReceiverTime (SBF 5914) received; using configured "
+                           "leap_seconds. Enable ReceiverTime on the receiver to "
+                           "track leap seconds automatically.");
+                fallback_leap_seconds_warned_ = true;
+            }
             if (settings_->read_from_sbf_log || settings_->read_from_pcap)
             {
                 wait(timestampFromRos(msg.header.stamp));
@@ -2330,6 +2342,33 @@ namespace io {
         node_->log(log_level::INFO, "SBF file writer thread stopped");
     }
 
+    bool MessageHandler::sbfStreamIsLive(const std::shared_ptr<Telegram>& telegram)
+    {
+        if (sbf_log_latched_)
+            return true;
+
+        constexpr uint64_t kLiveWindowNs = 5000000000ULL; // 5 s
+        constexpr uint32_t kMaxReplayBlocks = 200;
+
+        // If GNSS time can't be judged, or the replay budget is spent, log all.
+        if (!settings_->use_gnss_time || settings_->read_from_sbf_log ||
+            settings_->read_from_pcap || current_leap_seconds_ == -128 ||
+            ++sbf_pre_latch_blocks_ > kMaxReplayBlocks)
+        {
+            sbf_log_latched_ = true;
+            return true;
+        }
+
+        uint32_t tow = parsing_utilities::getTow(telegram->message);
+        uint16_t wnc = parsing_utilities::getWnc(telegram->message);
+        if (validValue(tow) && validValue(wnc) &&
+            !parsing_utilities::isStaleGnssTimestamp(timestampSBF(tow, wnc),
+                                                     telegram->stamp, kLiveWindowNs))
+            sbf_log_latched_ = true;
+
+        return sbf_log_latched_;
+    }
+
     void MessageHandler::parseSbf(const std::shared_ptr<Telegram>& telegram)
     {
         // One-time initialization of output file if needed
@@ -2341,11 +2380,8 @@ namespace io {
 
         uint16_t sbfId = parsing_utilities::getId(telegram->message);
 
-        // Queue telegram for asynchronous file writing if enabled
-        if (settings_->log_sbf && sbf_writer_running_) {
-            // Push a copy to the queue and let the worker thread handle file writing
+        if (settings_->log_sbf && sbf_writer_running_ && sbfStreamIsLive(telegram))
             sbf_write_queue_.push(telegram->message);
-        }
 
         /*node_->log(log_level::DEBUG, "ROSaic reading SBF block " +
                                         std::to_string(sbfId) + " made up of " +
@@ -2926,7 +2962,22 @@ namespace io {
                 node_->log(log_level::ERROR, "parse error in ReceiverTime");
                 break;
             }
-            current_leap_seconds_ = msg.delta_ls;
+            // Receiver value is authoritative and overrides the config fallback.
+            // delta_ls == -128 means the receiver does not know yet; keep fallback.
+            if (msg.delta_ls != -128)
+            {
+                if (!leap_seconds_from_receiver_ &&
+                    settings_->leap_seconds != -128 &&
+                    settings_->leap_seconds != msg.delta_ls)
+                    node_->log(log_level::WARN,
+                               "Configured leap_seconds (" +
+                                   std::to_string(settings_->leap_seconds) +
+                                   ") differs from receiver (" +
+                                   std::to_string(msg.delta_ls) +
+                                   "); using receiver value.");
+                current_leap_seconds_ = msg.delta_ls;
+                leap_seconds_from_receiver_ = true;
+            }
             break;
         }
         case GPS_NAV:
