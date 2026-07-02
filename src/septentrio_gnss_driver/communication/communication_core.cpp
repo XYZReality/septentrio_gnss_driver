@@ -28,6 +28,7 @@
 //
 // *****************************************************************************
 
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -1069,16 +1070,42 @@ namespace io {
         const std::vector<std::string>& include_ids,
         const std::vector<std::string>& exclude_ids)
     {
+        // These IDs originate from a ROS topic and are concatenated into an
+        // on-wire receiver command, so validate them first. A well-formed ID is
+        // a single constellation letter followed by 1-2 digits (e.g. G01, E7,
+        // C63). Anything else (spaces, '+', '-', CR/LF, injected terminators)
+        // is rejected so a malformed message cannot issue unintended commands.
+        auto isValidSatId = [](const std::string& id) {
+            if (id.size() < 2 || id.size() > 3)
+                return false;
+            if (!std::isalpha(static_cast<unsigned char>(id[0])))
+                return false;
+            for (size_t i = 1; i < id.size(); ++i)
+                if (!std::isdigit(static_cast<unsigned char>(id[i])))
+                    return false;
+            return true;
+        };
+
         // Step 1: if include_ids provided, send a reset/allow command first.
         // e.g.  ssu, all<CR>  or  ssu, G01+G02+...<CR>
+        // "all" is only accepted here (as a reset), never as an exclusion.
         if (!include_ids.empty())
         {
             std::string cmd = "ssu, ";
-            for (size_t i = 0; i < include_ids.size(); ++i)
+            bool first = true;
+            for (const auto& id : include_ids)
             {
-                if (i > 0)
+                if (id != "all" && !isValidSatId(id))
+                {
+                    node_->log(log_level::ERROR,
+                               "Rejecting satellite include command: invalid "
+                               "satellite id '" + id + "'");
+                    return;
+                }
+                if (!first)
                     cmd += '+';
-                cmd += include_ids[i];
+                cmd += id;
+                first = false;
             }
             cmd += "\x0D"; // CR terminator required by mosaic-X5
             node_->log(log_level::DEBUG,
@@ -1092,7 +1119,16 @@ namespace io {
         {
             std::string cmd = "ssu, ";
             for (const auto& id : exclude_ids)
+            {
+                if (!isValidSatId(id))
+                {
+                    node_->log(log_level::ERROR,
+                               "Rejecting satellite exclude command: invalid "
+                               "satellite id '" + id + "'");
+                    return;
+                }
                 cmd += '-' + id;
+            }
             cmd += "\x0D";
             node_->log(log_level::DEBUG,
                        "Sending satellite exclude command: " + cmd);

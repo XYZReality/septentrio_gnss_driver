@@ -1,8 +1,9 @@
 // *****************************************************************************
 //
-// Test: GPSNavParser, GALNavParser, BDSNavParser
+// Test: GPSNavParser, GALNavParser, BDSNavParser, plus the raw-subframe decoder
 // Verifies that the ephemeris SBF block parsers correctly extract all fields
-// from a known synthetic byte buffer.
+// from a known synthetic byte buffer, and that the raw GPS subframe decoder
+// maps bit fields back to the expected values (round trip).
 //
 // *****************************************************************************
 
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include <septentrio_gnss_driver/parsers/sbf_blocks.hpp>
+#include <septentrio_gnss_driver/parsers/sbf_raw_decode.hpp>
 #include <septentrio_gnss_driver/abstraction/typedefs.hpp>
 
 namespace {
@@ -159,14 +161,17 @@ TEST(SbfEphemerisParser, GPSNavAllFields)
 TEST(SbfEphemerisParser, GALNavBlockId)
 {
     std::vector<uint8_t> buf;
-    // Block header length: 14 bytes
-    // GALNav payload: svid(1)+source(1)+sqrt_a(8)+m_0(8)+e(8)+i_0(8)+omega(8)+
-    //   omega_0(8)+omegadot(4)+idot(4)+del_n(4)+c_uc(4)+c_us(4)+c_rc(4)+
-    //   c_rs(4)+c_ic(4)+c_is(4)+t_oe(4)+t_oc(4)+a_f2(4)+a_f1(4)+a_f0(8)+
-    //   wnt_oe(2)+wnt_oc(2)+iodnav(2)+health_ossol(2)+sisa_l1e5a(1)+
-    //   sisa_l1e5b(1)+reserved(1)+bgd_l1e5a(4)+bgd_l1e5b(4)+reserved(4) = 127
-    // Total = 14 + 127 = 141 (we pad to 142 so block fits cleanly)
-    const uint16_t total_length = 142;
+    // Block header: 14 bytes.
+    // GALNav payload consumed by GALNavParser (matches SBF ref guide field
+    // order, including the reserved bytes the parser skips):
+    //   svid(1)+source(1)+sqrt_a(8)+m_0(8)+e(8)+i_0(8)+omega(8)+omega_0(8)+
+    //   omegadot(4)+idot(4)+del_n(4)+c_uc(4)+c_us(4)+c_rc(4)+c_rs(4)+c_ic(4)+
+    //   c_is(4)+t_oe(4)+t_oc(4)+a_f2(4)+a_f1(4)+a_f0(8)+wnt_oe(2)+wnt_oc(2)+
+    //   iodnav(2)+health_ossol(2)+Health_PRS(1)+sisa_l1e5a(1)+sisa_l1e5b(1)+
+    //   SISA_L1AE6A(1)+bgd_l1e5a(4)+bgd_l1e5b(4)+BGD_L1AE6A(4)+CNAVenc(1) = 135
+    // Padded 3 bytes to a 4-byte boundary -> 138 payload.
+    // Total = 14 + 138 = 152.
+    const uint16_t total_length = 152;
     appendBlockHeader(buf, 4002, total_length);
 
     appendLE<uint8_t>(buf, 11);    // svid
@@ -195,12 +200,17 @@ TEST(SbfEphemerisParser, GALNavBlockId)
     appendLE<uint16_t>(buf, 2300);   // wnt_oc
     appendLE<uint16_t>(buf, 55);     // iodnav
     appendLE<uint16_t>(buf, 0);      // health_ossol
+    appendLE<uint8_t>(buf, 0);       // Health_PRS (skipped by parser)
     appendLE<uint8_t>(buf, 107);     // sisa_l1e5a
     appendLE<uint8_t>(buf, 107);     // sisa_l1e5b
-    appendLE<uint8_t>(buf, 255);     // SISA_L1AE6A (reserved)
+    appendLE<uint8_t>(buf, 255);     // SISA_L1AE6A (skipped by parser)
     appendLE<float>(buf,  2.3e-9f);  // bgd_l1e5a
     appendLE<float>(buf,  2.1e-9f);  // bgd_l1e5b
-    appendLE<float>(buf,  0.0f);     // BGD_L1AE6A (reserved) + CNAVenc padding
+    appendLE<float>(buf,  0.0f);     // BGD_L1AE6A (f4, skipped by parser)
+    appendLE<uint8_t>(buf, 0);       // CNAVenc (u1, skipped by parser)
+    appendLE<uint8_t>(buf, 0);       // padding to 4-byte block boundary
+    appendLE<uint8_t>(buf, 0);       // padding
+    appendLE<uint8_t>(buf, 0);       // padding
 
     GalNavMsg msg;
     bool ok = GALNavParser(nullptr, buf.begin(), buf.end(), msg);
@@ -224,9 +234,9 @@ TEST(SbfEphemerisParser, BDSNavBlockId)
     //   reserved2(2)+t_gd1(4)+t_gd2(4)+t_oc(4)+a_f2(4)+a_f1(4)+a_f0(4)+
     //   c_rs(4)+del_n(4)+m_0(8)+c_uc(4)+e(8)+c_us(4)+sqrt_a(8)+t_oe(4)+
     //   c_ic(4)+omega_0(8)+c_is(4)+i_0(8)+c_rc(4)+omega(8)+omegadot(4)+
-    //   idot(4)+wnt_oc(2)+wnt_oe(2) = 124
-    // Total = 14 + 124 = 138
-    const uint16_t total_length = 138;
+    //   idot(4)+wnt_oc(2)+wnt_oe(2) = 126
+    // Total = 14 + 126 = 140
+    const uint16_t total_length = 140;
     appendBlockHeader(buf, 4081, total_length);
 
     appendLE<uint8_t>(buf, 21);     // prn
@@ -277,8 +287,72 @@ TEST(SbfEphemerisParser, BDSNavBlockId)
     EXPECT_EQ(msg.wnt_oe, 900);
 }
 
-int main(int argc, char** argv)
+// ---------------------------------------------------------------------------
+// Raw GPS subframe decoder round trip
+// Encodes known bit-field values into a 90-byte SF1/SF2/SF3 buffer with the
+// same MSB-first convention the decoder uses, then verifies gps_decode_nav_msg
+// maps each field back (bit offset, sign handling and scale factor).
+// ---------------------------------------------------------------------------
+TEST(SbfRawDecode, GpsSubframeDecodeRoundTrip)
 {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    using namespace sbf_raw;
+
+    uint8_t sf[90];
+    std::memset(sf, 0, sizeof(sf));
+    constexpr int SF1 = 0;
+    constexpr int SF2 = 240; // 30 bytes
+    constexpr int SF3 = 480;
+
+    // Known raw bit-field values (as they appear on the wire, pre-scaling)
+    const uint32_t raw_wn       = 678;      // 10-bit field (max 1023)
+    const uint32_t raw_ura      = 5;
+    const uint32_t raw_health   = 0;
+    const uint32_t raw_iode2    = 77;
+    const uint32_t raw_iode3    = 77;
+    const uint32_t raw_e_hi     = 0x00;     // 8 bits
+    const uint32_t raw_e_lo     = 0x123456; // 24 bits
+    const uint32_t raw_sqrta_hi = 0x2A;     // 8 bits
+    const uint32_t raw_sqrta_lo = 0x654321; // 24 bits
+    const int32_t  raw_m0       = -100000;  // 32-bit signed
+
+    // Subframe 1
+    setbitu(sf, SF1 + 48, 10, raw_wn);
+    setbitu(sf, SF1 + 60,  4, raw_ura);
+    setbitu(sf, SF1 + 64,  6, raw_health);
+    // Subframe 2
+    setbitu(sf, SF2 + 48,  8, raw_iode2);
+    setbitu(sf, SF2 + 136, 8, raw_e_hi);       // e (u32) high 8 bits
+    setbitu(sf, SF2 + 144, 24, raw_e_lo);      // e (u32) low 24 bits
+    setbitu(sf, SF2 + 184, 8, raw_sqrta_hi);   // sqrt_a (u32) high 8 bits
+    setbitu(sf, SF2 + 192, 24, raw_sqrta_lo);  // sqrt_a (u32) low 24 bits
+    setbitu(sf, SF2 + 88,  8,
+            (static_cast<uint32_t>(raw_m0) >> 24) & 0xFF);   // m_0 (s32) high 8
+    setbitu(sf, SF2 + 96, 24,
+            static_cast<uint32_t>(raw_m0) & 0xFFFFFF);       // m_0 (s32) low 24
+    // Subframe 3
+    setbitu(sf, SF3 + 216, 8, raw_iode3);
+
+    GpsNavMsg msg;
+    gps_decode_nav_msg(sf, /*prn=*/7, /*wnc=*/2300, msg);
+
+    EXPECT_EQ(msg.prn,    7u);
+    EXPECT_EQ(msg.wn,     raw_wn);
+    EXPECT_EQ(msg.ura,    raw_ura);
+    EXPECT_EQ(msg.health, raw_health);
+    EXPECT_EQ(msg.iode2,  raw_iode2);
+    EXPECT_EQ(msg.iode3,  raw_iode3);
+
+    const double exp_e = static_cast<double>((raw_e_hi << 24) | raw_e_lo) * P2_33;
+    EXPECT_DOUBLE_EQ(msg.e, exp_e);
+
+    const double exp_sqrta =
+        static_cast<double>((raw_sqrta_hi << 24) | raw_sqrta_lo) * P2_19;
+    EXPECT_DOUBLE_EQ(msg.sqrt_a, exp_sqrta);
+
+    EXPECT_DOUBLE_EQ(msg.m_0, static_cast<double>(raw_m0) * P2_31);
+
+    // wnc from the SBF header is copied into both week-number fields
+    EXPECT_EQ(msg.wnt_oe, 2300u);
+    EXPECT_EQ(msg.wnt_oc, 2300u);
 }
+

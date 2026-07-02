@@ -1,5 +1,7 @@
 # Galileo broadcast ephemeris (SBF block GALNav, ID 4002)
-# All angular parameters are in semi-circles (multiply by pi to get radians).
+# Orbital angular parameters (m_0, i_0, omega, omega_0, del_n, omegadot, idot)
+# are in semi-circles; multiply by pi to get radians. The harmonic correction
+# terms c_uc/c_us/c_ic/c_is are already in radians and c_rc/c_rs are in metres.
 # SQRT_A is in m^(1/2); A = sqrt_a * sqrt_a gives the semi-major axis in metres.
 # Times t_oe and t_oc are seconds-of-week (GPS time frame).
 # source: 2 = I/NAV (L1, E5b), 16 = F/NAV (L1, E5a)
@@ -26,8 +28,8 @@ float32 c_uc          # Cosine harmonic correction to argument of latitude (rad)
 float32 c_us          # Sine harmonic correction to argument of latitude (rad)
 float32 c_rc          # Cosine harmonic correction to orbit radius (m)
 float32 c_rs          # Sine harmonic correction to orbit radius (m)
-float32 c_ic          # Sine harmonic correction to inclination angle (rad)
-float32 c_is          # Cosine harmonic correction to inclination angle (rad)
+float32 c_ic          # Cosine harmonic correction to inclination angle (rad)
+float32 c_is          # Sine harmonic correction to inclination angle (rad)
 
 uint32  t_oe          # Ephemeris reference time (s, GPS time)
 uint32  t_oc          # Clock data reference time (s, source-dependent)

@@ -1004,7 +1004,8 @@ void VectorInfoCartParser(It& it, VectorInfoCartMsg& msg, uint8_t sb_length)
  * GPSNavParser
  * @brief Parser for the SBF block "GPSNav" (ID 5891)
  * GPS/QZSS broadcast ephemeris decoded from subframes 1-3.
- * Angular parameters are in semi-circles; multiply by pi for radians.
+ * Orbital angular parameters are in semi-circles; the harmonic corrections
+ * c_uc/c_us/c_ic/c_is are in radians and c_rc/c_rs are in metres.
  */
 template <typename It>
 [[nodiscard]] bool GPSNavParser(ROSaicNodeBase* node, It it, It itEnd,
@@ -1065,7 +1066,8 @@ template <typename It>
  * GALNavParser
  * @brief Parser for the SBF block "GALNav" (ID 4002)
  * Galileo broadcast ephemeris (I/NAV or F/NAV).
- * Angular parameters are in semi-circles; multiply by pi for radians.
+ * Orbital angular parameters are in semi-circles; the harmonic corrections
+ * c_uc/c_us/c_ic/c_is are in radians and c_rc/c_rs are in metres.
  */
 template <typename It>
 [[nodiscard]] bool GALNavParser(ROSaicNodeBase* node, It it, It itEnd,
@@ -1124,7 +1126,8 @@ template <typename It>
  * BDSNavParser
  * @brief Parser for the SBF block "BDSNav" (ID 4081)
  * BeiDou broadcast ephemeris (D1/D2 navigation message).
- * Angular parameters are in semi-circles; multiply by pi for radians.
+ * Orbital angular parameters are in semi-circles; the harmonic corrections
+ * c_uc/c_us/c_ic/c_is are in radians and c_rc/c_rs are in metres.
  * t_oe and t_oc are in BeiDou System Time (14 s behind GPS time).
  */
 template <typename It>

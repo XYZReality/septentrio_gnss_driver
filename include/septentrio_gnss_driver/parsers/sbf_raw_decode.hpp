@@ -16,8 +16,10 @@
 //   BDS D1    : 114 bytes – SF1 @ [0:38), SF2 @ [38:76), SF3 @ [76:114)
 //               (38 bytes = 304 bits, covers the 300-bit BDS subframe)
 //
-// Angular parameters in GpsNavMsg / GalNavMsg / BdsNavMsg are in semi-circles.
-// All scale factors therefore omit the SC2RAD (= π) factor used in eph_t.
+// Orbital angular parameters in GpsNavMsg / GalNavMsg / BdsNavMsg are in
+// semi-circles, so their scale factors omit the SC2RAD (= π) factor used in
+// eph_t. The harmonic corrections c_uc/c_us/c_ic/c_is stay in radians and
+// c_rc/c_rs stay in metres, matching the message field definitions.
 // =============================================================================
 #pragma once
 

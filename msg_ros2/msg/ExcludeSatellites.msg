@@ -1,6 +1,6 @@
 # ExcludeSatellites — command message for the gnss_satellite_filter node
 #
-# Publish this message to the topic  gnss/exclude_satellites  to update
+# Publish this message to the topic  sgps/exclude_satellites  to update
 # which satellites the mosaic-X5 includes in its PVT solution.
 #
 # Satellite ID format follows Septentrio convention:

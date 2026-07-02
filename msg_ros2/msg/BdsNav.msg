@@ -1,5 +1,7 @@
 # BeiDou broadcast ephemeris (SBF block BDSNav, ID 4081)
-# All angular parameters are in semi-circles (multiply by pi to get radians).
+# Orbital angular parameters (m_0, i_0, omega, omega_0, del_n, omegadot, idot)
+# are in semi-circles; multiply by pi to get radians. The harmonic correction
+# terms c_uc/c_us/c_ic/c_is are already in radians and c_rc/c_rs are in metres.
 # SQRT_A is in m^(1/2); A = sqrt_a * sqrt_a gives the semi-major axis in metres.
 # t_oe and t_oc are in BeiDou System Time (lags GPS time by 14 s).
 # This is the ROS 2 version of the message.
