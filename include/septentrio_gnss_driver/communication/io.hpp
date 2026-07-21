@@ -569,9 +569,16 @@ namespace io {
         {
         }
 
-        ~SbfFileIo() { stream_->close(); }
+        ~SbfFileIo() { close(); }
 
-        void close() { stream_->close(); }
+        void close()
+        {
+            if (stream_)
+            {
+                stream_->close();
+                stream_.reset();
+            }
+        }
 
         [[nodiscard]] bool connect()
         {
@@ -617,16 +624,20 @@ namespace io {
         {
         }
 
-        ~PcapFileIo()
-        {
-            pcap_close(pcap_);
-            stream_->close();
-        }
+        ~PcapFileIo() { close(); }
 
         void close()
         {
-            pcap_close(pcap_);
-            stream_->close();
+            if (pcap_)
+            {
+                pcap_close(pcap_);
+                pcap_ = nullptr;
+            }
+            if (stream_)
+            {
+                stream_->close();
+                stream_.reset();
+            }
         }
 
         [[nodiscard]] bool connect()
@@ -656,7 +667,7 @@ namespace io {
         ROSaicNodeBase* node_;
         std::shared_ptr<boost::asio::io_context> ioContext_;
         std::array<char, 100> errBuff_;
-        pcap_t* pcap_;
+        pcap_t* pcap_ = nullptr;
 
     public:
         std::unique_ptr<boost::asio::posix::stream_descriptor> stream_;

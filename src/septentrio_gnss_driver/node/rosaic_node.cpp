@@ -43,6 +43,16 @@ namespace rosaic_node {
     ROSaicNode::ROSaicNode(const rclcpp::NodeOptions& options) :
         ROSaicNodeBase(options), IO_(this), tfBuffer_(this->get_clock())
     {
+        this->log(log_level::DEBUG, "Called ROSaicNode() constructor..");
+    }
+
+    ROSaicNode::~ROSaicNode()
+    {
+        takedown();
+    }
+
+    CallbackReturn ROSaicNode::do_configure(const rclcpp_lifecycle::State&)
+    {
         param("log_sbf", settings_.log_sbf, false);
         param("output_path", settings_.output_path, static_cast<std::string>("~/.ros/log"));
         param("activate_debug_log", settings_.activate_debug_log, false);
@@ -58,87 +68,51 @@ namespace rosaic_node {
             }
         }
 
-        this->log(log_level::DEBUG, "Called ROSaicNode() constructor..");
+        // Publish health/state on /diagnostics so the supervisor can observe us.
+        initStatus("septentrio_gnss");
+        reportStatus(orin_common::StatusReporter::OK,
+                     orin_common::StatusReporter::State::INITIALIZING,
+                     "configuring GNSS driver");
 
-        // tfListener_ = std::make_unique<tf2_ros::TransformListener>(tfBuffer_);
-
-        // Parameters must be set before initializing IO
         if (!getROSParams())
-            return;
-        
-        // Advertise services instead of automatically connecting
-        advertiseServices();
-        
-        this->log(log_level::DEBUG, "Leaving ROSaicNode() constructor..");
+        {
+            reportStatus(orin_common::StatusReporter::ERROR,
+                         orin_common::StatusReporter::State::FAULT,
+                         "invalid ROS parameters");
+            return CallbackReturn::FAILURE;
+        }
+
+        advertiseSubscribers();
+        return CallbackReturn::SUCCESS;
     }
 
-    ROSaicNode::~ROSaicNode()
+    CallbackReturn ROSaicNode::do_cleanup(const rclcpp_lifecycle::State&)
     {
         takedown();
+        exclude_sv_sub_.reset();
+        return CallbackReturn::SUCCESS;
     }
 
-    void ROSaicNode::advertiseServices()
+    void ROSaicNode::advertiseSubscribers()
     {
-        this->log(log_level::INFO, "Advertising services: start and stop");
-        
-        // Advertise the "start" service
-        start_service_ = this->create_service<std_srvs::srv::Trigger>(
-            "start", std::bind(&ROSaicNode::startServiceCallback, this, 
-            std::placeholders::_1, std::placeholders::_2));
-        
-        // Advertise the "stop" service
-        stop_service_ = this->create_service<std_srvs::srv::Trigger>(
-            "stop", std::bind(&ROSaicNode::stopServiceCallback, this, 
-            std::placeholders::_1, std::placeholders::_2));
-
         // Subscribe to satellite exclusion commands from the filter node
-        exclude_sv_sub_ = this->create_subscription<ExcludeSatellitesMsg>(
-            "/sgps/exclude_satellites", 10,
-            std::bind(&ROSaicNode::excludeSatellitesCallback, this,
-                      std::placeholders::_1));
+        exclude_sv_sub_ =
+            get_legacy_node_handle()->create_subscription<ExcludeSatellitesMsg>(
+                "/sgps/exclude_satellites", 10,
+                std::bind(&ROSaicNode::excludeSatellitesCallback, this,
+                          std::placeholders::_1));
         this->log(log_level::INFO,
                   "Subscribed to /sgps/exclude_satellites for PVT satellite exclusion");
     }
-    
-    void ROSaicNode::startServiceCallback(
-        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+
+    void ROSaicNode::start()
     {
-        
-        this->log(log_level::INFO, "Received start command");
-        
-        // Check if already connected
-        if (isConnected_) {
-            response->success = false;
-            response->message = "Already connected";
-            return;
-        }
-        
-        // Start connection in separate thread
-        setupThread_ = std::thread(std::bind(&ROSaicNode::setup, this));
-        
-        response->success = true;
-        response->message = "Connection started";
+        setup();
     }
-    
-    void ROSaicNode::stopServiceCallback(
-        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+
+    void ROSaicNode::stop()
     {
-        
-        this->log(log_level::INFO, "Received stop command");
-        
-        // Check if already disconnected
-        if (!isConnected_) {
-            response->success = false;
-            response->message = "Already disconnected";
-            return;
-        }
-        
-        // Close the connection
         takedown();
-        response->success = true;
-        response->message = "Connection stopped";
     }
 
     void ROSaicNode::setup()
@@ -146,10 +120,18 @@ namespace rosaic_node {
         log(log_level::INFO, "Connection setup.");
         if(!isConnected_)
         {
-            // Initializes Connection
-            IO_.connect();
+            if (!IO_.connect())
+            {
+                reportStatus(orin_common::StatusReporter::ERROR,
+                             orin_common::StatusReporter::State::FAULT,
+                             "failed to connect to receiver");
+                throw std::runtime_error("failed to connect to receiver");
+            }
             isConnected_ = true;
             log(log_level::INFO, "Connection established successfully.");
+            reportStatus(orin_common::StatusReporter::OK,
+                         orin_common::StatusReporter::State::NAVIGATING,
+                         "connected to receiver");
         }
     }
 
@@ -159,13 +141,10 @@ namespace rosaic_node {
         if(isConnected_)
         {
             IO_.close();
-            if (setupThread_.joinable())
-            {
-                setupThread_.join();
-                this->log(log_level::INFO, "Thread Joined");
-            }
-
             isConnected_ = false;
+            reportStatus(orin_common::StatusReporter::OK,
+                         orin_common::StatusReporter::State::OFFLINE,
+                         "disconnected from receiver");
         }
     }
 

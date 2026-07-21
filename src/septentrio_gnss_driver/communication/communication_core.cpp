@@ -189,7 +189,7 @@ namespace io {
         }
     }
 
-    void CommunicationCore::connect()
+    bool CommunicationCore::connect()
     {
         node_->log(log_level::INFO, "This is ROSaic driver version 1.4.6.");
         node_->log(log_level::DEBUG, "Called connect() method");
@@ -207,11 +207,11 @@ namespace io {
         {
             initializedIo_ = manager_->connect();
             if (!initializedIo_)
-                return;
+                return false;
         }
         // If node is shut down before a connection could be established
         if (!node_->ok())
-            return;
+            return false;
 
         // Sends commands to the Rx regarding which SBF/NMEA messages it should
         // output
@@ -227,6 +227,7 @@ namespace io {
 
         node_->log(log_level::DEBUG,
                    "Successully connected. Leaving connect() method");
+        return true;
     }
 
     [[nodiscard]] bool CommunicationCore::initializeIo()
