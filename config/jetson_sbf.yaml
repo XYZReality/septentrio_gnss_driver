@@ -3,7 +3,7 @@
 # GNSS/INS Parameters
 septentrio_gnss_driver:
   ros__parameters:
-    device: file_name:/data/dls/20260520_rigby_friend-st-loop/septentrio.sbf
+    device: file_name:/data/20260520_rigby_friend-st-loop/septentrio.sbf
 
     serial:
       baudrate: 921600

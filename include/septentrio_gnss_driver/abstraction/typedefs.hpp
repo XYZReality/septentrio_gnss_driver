@@ -37,6 +37,7 @@
 #include <unordered_map>
 // ROS includes
 #include <rclcpp/rclcpp.hpp>
+#include <orin_common/lifecycle_driver_base.hpp>
 // tf2 includes
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
@@ -198,11 +199,12 @@ namespace log_level {
  * @class ROSaicNodeBase
  * @brief This class is the base class for abstraction
  */
-class ROSaicNodeBase : public rclcpp::Node
+class ROSaicNodeBase : public LifecycleDriverBase
 {
 public:
     ROSaicNodeBase(const rclcpp::NodeOptions& options) :
-        Node("septentrio_gnss", options), tf2Publisher_(this),
+        LifecycleDriverBase("septentrio_gnss", options),
+        tf2Publisher_(get_legacy_node_handle()),
         tfBuffer_(this->get_clock()) //, tfListener_(tfBuffer_)
     {
     }
@@ -219,7 +221,7 @@ public:
         {
             if (settings_.ins_vsm.ros_source == "odometry")
                 odometrySubscriber_ =
-                    this->create_subscription<nav_msgs::msg::Odometry>(
+                    get_legacy_node_handle()->create_subscription<nav_msgs::msg::Odometry>(
                         "odometry_vsm",
                         rclcpp::QoS(rclcpp::KeepLast(1))
                             .durability_volatile()
@@ -228,7 +230,7 @@ public:
                                   std::placeholders::_1));
             else if (settings_.ins_vsm.ros_source == "twist")
                 twistSubscriber_ =
-                    this->create_subscription<TwistWithCovarianceStampedMsg>(
+                    get_legacy_node_handle()->create_subscription<TwistWithCovarianceStampedMsg>(
                         "twist_vsm",
                         rclcpp::QoS(rclcpp::KeepLast(1))
                             .durability_volatile()
@@ -273,13 +275,13 @@ public:
     template <typename T>
     bool param(const std::string& name, T& val, const T& defaultVal)
     {
-        if (this->has_parameter(name))
-            this->undeclare_parameter(name);
-
         try
         {
-            val = this->declare_parameter<T>(name, defaultVal);
-        } catch (std::runtime_error& e)
+            if (this->has_parameter(name))
+                val = this->get_parameter(name).get_value<T>();
+            else
+                val = this->declare_parameter<T>(name, defaultVal);
+        } catch (const std::exception& e)
         {
             RCLCPP_WARN_STREAM(this->get_logger(), e.what());
             return false;
@@ -373,7 +375,7 @@ public:
             if (this->ok())
             {
                 typename rclcpp::Publisher<M>::SharedPtr pub =
-                    this->create_publisher<M>(
+                    get_legacy_node_handle()->create_publisher<M>(
                         topic, rclcpp::QoS(rclcpp::KeepLast(queueSize_))
                                    .durability_volatile()
                                    .reliable());

@@ -157,6 +157,8 @@ elseif(ament_cmake_FOUND)
   find_package(ament_cmake REQUIRED)
   find_package(rclcpp REQUIRED)
   find_package(rclcpp_components REQUIRED)
+  find_package(rclcpp_lifecycle REQUIRED)
+  find_package(orin_common REQUIRED)
   find_package(rosidl_default_generators REQUIRED)
   find_package(diagnostic_msgs REQUIRED)
   find_package(nmea_msgs REQUIRED)
@@ -213,6 +215,8 @@ elseif(ament_cmake_FOUND)
   set(dependencies
     rclcpp
     rclcpp_components
+    rclcpp_lifecycle
+    orin_common
     diagnostic_msgs
     nmea_msgs
     sensor_msgs
@@ -244,6 +248,10 @@ elseif(ament_cmake_FOUND)
   target_include_directories(${library_name} PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"  
     "$<INSTALL_INTERFACE:include>"
+  )
+  ament_target_dependencies(${library_name}
+    rclcpp_lifecycle
+    orin_common
   )
   target_link_libraries(${library_name}
     boost_regex # ordering is important for regex https://stackoverflow.com/questions/17588440/cannot-link-boost-regex

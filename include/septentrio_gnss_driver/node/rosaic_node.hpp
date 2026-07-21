@@ -83,12 +83,18 @@ namespace rosaic_node {
     class ROSaicNode : public ROSaicNodeBase
     {
     public:
-        //! The constructor initializes and runs the ROSaic node, if everything works
-        //! fine. It loads the user-defined ROS parameters, subscribes to Rx
-        //! messages, and publishes requested ROS messages...
+        //! Constructs the node; parameters load and the Rx connects on the
+        //! managed lifecycle transitions (configure/activate).
         ROSaicNode(const rclcpp::NodeOptions& options);
 
         ~ROSaicNode();
+
+    protected:
+        CallbackReturn do_configure(const rclcpp_lifecycle::State& prev_state) override;
+        CallbackReturn do_cleanup(const rclcpp_lifecycle::State& prev_state) override;
+
+        void start() override;
+        void stop() override;
 
     private:
         void setup();
@@ -134,47 +140,15 @@ namespace rosaic_node {
         tf2_ros::Buffer tfBuffer_;
         std::unique_ptr<tf2_ros::TransformListener> tfListener_;
 
-        std::thread setupThread_;
-        //! Service to start the connection to the receiver
-        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_service_;
-        //! Service to stop the connection to the receiver
-        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
         //! Flag indicating whether the connection to the receiver is active
         bool isConnected_ = false;
         //! Subscription for satellite exclusion commands from the filter node
         rclcpp::Subscription<ExcludeSatellitesMsg>::SharedPtr exclude_sv_sub_;
         
         /**
-         * @brief Advertises the start and stop services
-         * 
-         * This is called during node initialization to create the services
-         * that control the connection to the receiver.
+         * @brief Creates the satellite-exclusion subscription.
          */
-        void advertiseServices();
-        
-        /**
-         * @brief Callback for the start service
-         * 
-         * Initiates the connection to the receiver when triggered.
-         * 
-         * @param[in] request The service request (empty for Trigger)
-         * @param[out] response The service response with success status and message
-         */
-        void startServiceCallback(
-            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
-        
-        /**
-         * @brief Callback for the stop service
-         * 
-         * Closes the connection to the receiver when triggered.
-         * 
-         * @param[in] request The service request (empty for Trigger)
-         * @param[out] response The service response with success status and message
-         */
-        void stopServiceCallback(
-            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+        void advertiseSubscribers();
 
         /**
          * @brief Callback for satellite exclusion commands from the filter node.

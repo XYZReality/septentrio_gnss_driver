@@ -43,7 +43,9 @@ int main(int argc, char** argv)
     auto options = rclcpp::NodeOptions().use_intra_process_comms(false);
     auto rx_node = std::make_shared<rosaic_node::ROSaicNode>(options);
 
-    rclcpp::spin(rx_node->get_node_base_interface());
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(rx_node->get_node_base_interface());
+    executor.spin();
 
     rclcpp::shutdown();
     return 0;
