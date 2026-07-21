@@ -120,8 +120,13 @@ namespace rosaic_node {
         log(log_level::INFO, "Connection setup.");
         if(!isConnected_)
         {
-            // Initializes Connection
-            IO_.connect();
+            if (!IO_.connect())
+            {
+                reportStatus(orin_common::StatusReporter::ERROR,
+                             orin_common::StatusReporter::State::FAULT,
+                             "failed to connect to receiver");
+                throw std::runtime_error("failed to connect to receiver");
+            }
             isConnected_ = true;
             log(log_level::INFO, "Connection established successfully.");
             reportStatus(orin_common::StatusReporter::OK,

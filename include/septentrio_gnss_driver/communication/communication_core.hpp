@@ -110,8 +110,9 @@ namespace io {
 
         /**
          * @brief Connects the data stream
+         * @return true if the connection was established, false otherwise
          */
-        void connect();
+        [[nodiscard]] bool connect();
 
         /**
          * @brief Configures Rx: Which SBF/NMEA messages it should output and later

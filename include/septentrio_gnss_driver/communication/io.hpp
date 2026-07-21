@@ -569,9 +569,16 @@ namespace io {
         {
         }
 
-        ~SbfFileIo() { if (stream_) stream_->close(); }
+        ~SbfFileIo() { close(); }
 
-        void close() { if (stream_) stream_->close(); }
+        void close()
+        {
+            if (stream_)
+            {
+                stream_->close();
+                stream_.reset();
+            }
+        }
 
         [[nodiscard]] bool connect()
         {
@@ -617,16 +624,20 @@ namespace io {
         {
         }
 
-        ~PcapFileIo()
-        {
-            if (pcap_) pcap_close(pcap_);
-            if (stream_) stream_->close();
-        }
+        ~PcapFileIo() { close(); }
 
         void close()
         {
-            if (pcap_) pcap_close(pcap_);
-            if (stream_) stream_->close();
+            if (pcap_)
+            {
+                pcap_close(pcap_);
+                pcap_ = nullptr;
+            }
+            if (stream_)
+            {
+                stream_->close();
+                stream_.reset();
+            }
         }
 
         [[nodiscard]] bool connect()
