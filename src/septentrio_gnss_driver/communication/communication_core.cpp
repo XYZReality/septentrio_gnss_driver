@@ -28,6 +28,7 @@
 //
 // *****************************************************************************
 
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -87,6 +88,14 @@ namespace io {
         resetSettings();
 
         manager_->close();
+
+        // In file replay, dump the queue and then push one EMPTY telegram for the blocking pop()
+        if (settings_->read_from_sbf_log || settings_->read_from_pcap)
+        {
+            running_ = false;
+            telegramQueue_.reset();
+            telegramQueue_.push(std::make_shared<Telegram>());
+        }
     }
 
     void CommunicationCore::resetSettings()
@@ -187,6 +196,11 @@ namespace io {
         node_->log(
             log_level::DEBUG,
             "Started timer for calling connect() method until connection succeeds");
+
+        // Seed leap seconds from YAML before any SBF blocks are processed.
+        // This ensures timestamps are valid from the very first block when
+        // playing back an SBF file that has no ReceiverTime block at the start.
+        telegramHandler_.setLeapSeconds();
 
         boost::asio::io_context io;
         if (initializeIo())
@@ -1049,6 +1063,76 @@ namespace io {
                 if (tcpVsm_)
                     tcpVsm_.get()->send(velNmea);
             }
+        }
+    }
+
+    void CommunicationCore::sendSatelliteExclusion(
+        const std::vector<std::string>& include_ids,
+        const std::vector<std::string>& exclude_ids)
+    {
+        // These IDs originate from a ROS topic and are concatenated into an
+        // on-wire receiver command, so validate them first. A well-formed ID is
+        // a single constellation letter followed by 1-2 digits (e.g. G01, E7,
+        // C63). Anything else (spaces, '+', '-', CR/LF, injected terminators)
+        // is rejected so a malformed message cannot issue unintended commands.
+        auto isValidSatId = [](const std::string& id) {
+            if (id.size() < 2 || id.size() > 3)
+                return false;
+            if (!std::isalpha(static_cast<unsigned char>(id[0])))
+                return false;
+            for (size_t i = 1; i < id.size(); ++i)
+                if (!std::isdigit(static_cast<unsigned char>(id[i])))
+                    return false;
+            return true;
+        };
+
+        // Step 1: if include_ids provided, send a reset/allow command first.
+        // e.g.  ssu, all<CR>  or  ssu, G01+G02+...<CR>
+        // "all" is only accepted here (as a reset), never as an exclusion.
+        if (!include_ids.empty())
+        {
+            std::string cmd = "ssu, ";
+            bool first = true;
+            for (const auto& id : include_ids)
+            {
+                if (id != "all" && !isValidSatId(id))
+                {
+                    node_->log(log_level::ERROR,
+                               "Rejecting satellite include command: invalid "
+                               "satellite id '" + id + "'");
+                    return;
+                }
+                if (!first)
+                    cmd += '+';
+                cmd += id;
+                first = false;
+            }
+            cmd += "\x0D"; // CR terminator required by mosaic-X5
+            node_->log(log_level::DEBUG,
+                       "Sending satellite include command: " + cmd);
+            send(cmd);
+        }
+
+        // Step 2: if exclude_ids provided, remove each from PVT usage.
+        // e.g.  ssu, -G03-E07<CR>
+        if (!exclude_ids.empty())
+        {
+            std::string cmd = "ssu, ";
+            for (const auto& id : exclude_ids)
+            {
+                if (!isValidSatId(id))
+                {
+                    node_->log(log_level::ERROR,
+                               "Rejecting satellite exclude command: invalid "
+                               "satellite id '" + id + "'");
+                    return;
+                }
+                cmd += '-' + id;
+            }
+            cmd += "\x0D";
+            node_->log(log_level::DEBUG,
+                       "Sending satellite exclude command: " + cmd);
+            send(cmd);
         }
     }
 

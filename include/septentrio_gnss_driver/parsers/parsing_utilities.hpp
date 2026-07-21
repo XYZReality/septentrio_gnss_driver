@@ -541,4 +541,18 @@ namespace parsing_utilities {
         return std::isnan(val) ? 0.0 : val;
     }
 
+    //! True if a block's GNSS time differs from the host clock by more than
+    //! threshold_ns (0 disables); used to skip the receiver's buffered replay.
+    inline bool isStaleGnssTimestamp(uint64_t gnss_unix_ns, uint64_t host_unix_ns,
+                                     uint64_t threshold_ns)
+    {
+        if (threshold_ns == 0)
+            return false;
+        int64_t diff = static_cast<int64_t>(gnss_unix_ns) -
+                       static_cast<int64_t>(host_unix_ns);
+        if (diff < 0)
+            diff = -diff;
+        return static_cast<uint64_t>(diff) > threshold_ns;
+    }
+
 } // namespace parsing_utilities

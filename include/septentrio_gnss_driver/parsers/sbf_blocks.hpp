@@ -1001,6 +1001,195 @@ void VectorInfoCartParser(It& it, VectorInfoCartMsg& msg, uint8_t sb_length)
 };
 
 /**
+ * GPSNavParser
+ * @brief Parser for the SBF block "GPSNav" (ID 5891)
+ * GPS/QZSS broadcast ephemeris decoded from subframes 1-3.
+ * Orbital angular parameters are in semi-circles; the harmonic corrections
+ * c_uc/c_us/c_ic/c_is are in radians and c_rc/c_rs are in metres.
+ */
+template <typename It>
+[[nodiscard]] bool GPSNavParser(ROSaicNodeBase* node, It it, It itEnd,
+                                GpsNavMsg& msg)
+{
+    if (!BlockHeaderParser(node, it, msg.block_header))
+        return false;
+    if (msg.block_header.id != 5891)
+    {
+        node->log(log_level::ERROR, "Parse error: Wrong header ID " +
+                                        std::to_string(msg.block_header.id));
+        return false;
+    }
+    qiLittleEndianParser(it, msg.prn);
+    std::advance(it, 1); // reserved
+    qiLittleEndianParser(it, msg.wn);
+    qiLittleEndianParser(it, msg.ca_or_p_on_l2);
+    qiLittleEndianParser(it, msg.ura);
+    qiLittleEndianParser(it, msg.health);
+    qiLittleEndianParser(it, msg.l2_data_flag);
+    qiLittleEndianParser(it, msg.iodc);
+    qiLittleEndianParser(it, msg.iode2);
+    qiLittleEndianParser(it, msg.iode3);
+    qiLittleEndianParser(it, msg.fit_int_flg);
+    std::advance(it, 1); // reserved2
+    qiLittleEndianParser(it, msg.t_gd);
+    qiLittleEndianParser(it, msg.t_oc);
+    qiLittleEndianParser(it, msg.a_f2);
+    qiLittleEndianParser(it, msg.a_f1);
+    qiLittleEndianParser(it, msg.a_f0);
+    qiLittleEndianParser(it, msg.c_rs);
+    qiLittleEndianParser(it, msg.del_n);
+    qiLittleEndianParser(it, msg.m_0);
+    qiLittleEndianParser(it, msg.c_uc);
+    qiLittleEndianParser(it, msg.e);
+    qiLittleEndianParser(it, msg.c_us);
+    qiLittleEndianParser(it, msg.sqrt_a);
+    qiLittleEndianParser(it, msg.t_oe);
+    qiLittleEndianParser(it, msg.c_ic);
+    qiLittleEndianParser(it, msg.omega_0);
+    qiLittleEndianParser(it, msg.c_is);
+    qiLittleEndianParser(it, msg.i_0);
+    qiLittleEndianParser(it, msg.c_rc);
+    qiLittleEndianParser(it, msg.omega);
+    qiLittleEndianParser(it, msg.omegadot);
+    qiLittleEndianParser(it, msg.idot);
+    qiLittleEndianParser(it, msg.wnt_oc);
+    qiLittleEndianParser(it, msg.wnt_oe);
+    if (it > itEnd)
+    {
+        node->log(log_level::ERROR, "Parse error: iterator past end.");
+        return false;
+    }
+    return true;
+}
+
+/**
+ * GALNavParser
+ * @brief Parser for the SBF block "GALNav" (ID 4002)
+ * Galileo broadcast ephemeris (I/NAV or F/NAV).
+ * Orbital angular parameters are in semi-circles; the harmonic corrections
+ * c_uc/c_us/c_ic/c_is are in radians and c_rc/c_rs are in metres.
+ */
+template <typename It>
+[[nodiscard]] bool GALNavParser(ROSaicNodeBase* node, It it, It itEnd,
+                                GalNavMsg& msg)
+{
+    if (!BlockHeaderParser(node, it, msg.block_header))
+        return false;
+    if (msg.block_header.id != 4002)
+    {
+        node->log(log_level::ERROR, "Parse error: Wrong header ID " +
+                                        std::to_string(msg.block_header.id));
+        return false;
+    }
+    qiLittleEndianParser(it, msg.svid);
+    qiLittleEndianParser(it, msg.source);
+    qiLittleEndianParser(it, msg.sqrt_a);
+    qiLittleEndianParser(it, msg.m_0);
+    qiLittleEndianParser(it, msg.e);
+    qiLittleEndianParser(it, msg.i_0);
+    qiLittleEndianParser(it, msg.omega);
+    qiLittleEndianParser(it, msg.omega_0);
+    qiLittleEndianParser(it, msg.omegadot);
+    qiLittleEndianParser(it, msg.idot);
+    qiLittleEndianParser(it, msg.del_n);
+    qiLittleEndianParser(it, msg.c_uc);
+    qiLittleEndianParser(it, msg.c_us);
+    qiLittleEndianParser(it, msg.c_rc);
+    qiLittleEndianParser(it, msg.c_rs);
+    qiLittleEndianParser(it, msg.c_ic);
+    qiLittleEndianParser(it, msg.c_is);
+    qiLittleEndianParser(it, msg.t_oe);
+    qiLittleEndianParser(it, msg.t_oc);
+    qiLittleEndianParser(it, msg.a_f2);
+    qiLittleEndianParser(it, msg.a_f1);
+    qiLittleEndianParser(it, msg.a_f0);
+    qiLittleEndianParser(it, msg.wnt_oe);
+    qiLittleEndianParser(it, msg.wnt_oc);
+    qiLittleEndianParser(it, msg.iodnav);
+    qiLittleEndianParser(it, msg.health_ossol);
+    std::advance(it, 1); // Health_PRS (u1) — not in GalNavMsg, skip
+    qiLittleEndianParser(it, msg.sisa_l1e5a);
+    qiLittleEndianParser(it, msg.sisa_l1e5b);
+    std::advance(it, 1); // SISA_L1AE6A (reserved)
+    qiLittleEndianParser(it, msg.bgd_l1e5a);
+    qiLittleEndianParser(it, msg.bgd_l1e5b);
+    std::advance(it, 5); // BGD_L1AE6A (f4, reserved) + CNAVenc (u1)
+    if (it > itEnd)
+    {
+        node->log(log_level::ERROR, "Parse error: iterator past end.");
+        return false;
+    }
+    return true;
+}
+
+/**
+ * BDSNavParser
+ * @brief Parser for the SBF block "BDSNav" (ID 4081)
+ * BeiDou broadcast ephemeris (D1/D2 navigation message).
+ * Orbital angular parameters are in semi-circles; the harmonic corrections
+ * c_uc/c_us/c_ic/c_is are in radians and c_rc/c_rs are in metres.
+ * t_oe and t_oc are in BeiDou System Time (14 s behind GPS time).
+ */
+template <typename It>
+[[nodiscard]] bool BDSNavParser(ROSaicNodeBase* node, It it, It itEnd,
+                                BdsNavMsg& msg)
+{
+    if (!BlockHeaderParser(node, it, msg.block_header))
+        return false;
+    if (msg.block_header.id != 4081)
+    {
+        node->log(log_level::ERROR, "Parse error: Wrong header ID " +
+                                        std::to_string(msg.block_header.id));
+        return false;
+    }
+    qiLittleEndianParser(it, msg.prn);
+    // Convert Septentrio SVID encoding (sec 4.1.9) to BDS PRN:
+    //   141-180 -> C01-C40 (PRN = svid - 140)
+    //   223-245 -> C41-C63 (PRN = svid - 182)
+    if (msg.prn >= 141 && msg.prn <= 180)
+        msg.prn = static_cast<uint8_t>(msg.prn - 140);
+    else if (msg.prn >= 223 && msg.prn <= 245)
+        msg.prn = static_cast<uint8_t>(msg.prn - 182);
+    std::advance(it, 1); // reserved
+    qiLittleEndianParser(it, msg.wn);
+    qiLittleEndianParser(it, msg.ura);
+    qiLittleEndianParser(it, msg.sat_h1);
+    qiLittleEndianParser(it, msg.iodc);
+    qiLittleEndianParser(it, msg.iode);
+    std::advance(it, 2); // reserved2
+    qiLittleEndianParser(it, msg.t_gd1);
+    qiLittleEndianParser(it, msg.t_gd2);
+    qiLittleEndianParser(it, msg.t_oc);
+    qiLittleEndianParser(it, msg.a_f2);
+    qiLittleEndianParser(it, msg.a_f1);
+    qiLittleEndianParser(it, msg.a_f0);
+    qiLittleEndianParser(it, msg.c_rs);
+    qiLittleEndianParser(it, msg.del_n);
+    qiLittleEndianParser(it, msg.m_0);
+    qiLittleEndianParser(it, msg.c_uc);
+    qiLittleEndianParser(it, msg.e);
+    qiLittleEndianParser(it, msg.c_us);
+    qiLittleEndianParser(it, msg.sqrt_a);
+    qiLittleEndianParser(it, msg.t_oe);
+    qiLittleEndianParser(it, msg.c_ic);
+    qiLittleEndianParser(it, msg.omega_0);
+    qiLittleEndianParser(it, msg.c_is);
+    qiLittleEndianParser(it, msg.i_0);
+    qiLittleEndianParser(it, msg.c_rc);
+    qiLittleEndianParser(it, msg.omega);
+    qiLittleEndianParser(it, msg.omegadot);
+    qiLittleEndianParser(it, msg.idot);
+    qiLittleEndianParser(it, msg.wnt_oc);
+    qiLittleEndianParser(it, msg.wnt_oe);
+    if (it > itEnd)
+    {
+        node->log(log_level::ERROR, "Parse error: iterator past end.");
+        return false;
+    }
+    return true;
+}
+
+/**
  * BaseVectorCartParser
  * @brief Qi based parser for the SBF block "BaseVectorCart"
  */

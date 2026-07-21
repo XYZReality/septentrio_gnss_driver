@@ -90,6 +90,14 @@ namespace rosaic_node {
         stop_service_ = this->create_service<std_srvs::srv::Trigger>(
             "stop", std::bind(&ROSaicNode::stopServiceCallback, this, 
             std::placeholders::_1, std::placeholders::_2));
+
+        // Subscribe to satellite exclusion commands from the filter node
+        exclude_sv_sub_ = this->create_subscription<ExcludeSatellitesMsg>(
+            "/sgps/exclude_satellites", 10,
+            std::bind(&ROSaicNode::excludeSatellitesCallback, this,
+                      std::placeholders::_1));
+        this->log(log_level::INFO,
+                  "Subscribed to /sgps/exclude_satellites for PVT satellite exclusion");
     }
     
     void ROSaicNode::startServiceCallback(
@@ -269,6 +277,9 @@ namespace rosaic_node {
         param("publish.diagnostics", settings_.publish_diagnostics, false);
         param("publish.aimplusstatus", settings_.publish_aimplusstatus, false);
         param("publish.galauthstatus", settings_.publish_galauthstatus, false);
+        param("publish.gpsnav", settings_.publish_gpsnav, false);
+        param("publish.galnav", settings_.publish_galnav, false);
+        param("publish.bdsnav", settings_.publish_bdsnav, false);
         param("publish.gpgga", settings_.publish_gpgga, false);
         param("publish.gprmc", settings_.publish_gprmc, false);
         param("publish.gpgsa", settings_.publish_gpgsa, false);
@@ -916,6 +927,23 @@ namespace rosaic_node {
     void ROSaicNode::sendVelocity(const std::string& velNmea)
     {
         IO_.sendVelocity(velNmea);
+    }
+
+    void ROSaicNode::excludeSatellitesCallback(
+        const ExcludeSatellitesMsg::SharedPtr msg)
+    {
+        if (!isConnected_)
+        {
+            this->log(log_level::WARN,
+                      "excludeSatellitesCallback: receiver not connected, ignoring command");
+            return;
+        }
+        // Convert ROS msg vectors to std::vector<std::string>
+        std::vector<std::string> include_ids(msg->include_ids.begin(),
+                                             msg->include_ids.end());
+        std::vector<std::string> exclude_ids(msg->exclude_ids.begin(),
+                                             msg->exclude_ids.end());
+        IO_.sendSatelliteExclusion(include_ids, exclude_ids);
     }
 } // namespace rosaic_node
 

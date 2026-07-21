@@ -3,7 +3,7 @@
 # GNSS/INS Parameters
 septentrio_gnss_driver:
   ros__parameters:
-    device: file_name:/data/rigb/16-06-25_viewer_test/output/16-06-25_viewer_test/septentrio.sbf
+    device: file_name:/data/dls/20260520_rigby_friend-st-loop/septentrio.sbf
 
     serial:
       baudrate: 921600
@@ -74,8 +74,8 @@ septentrio_gnss_driver:
       rest: 500
 
     # time
-    use_gnss_time: false
-    leap_seconds: 18  # Current GPS-UTC offset (adjust as needed)
+    use_gnss_time: true
+    leap_seconds: 18
     ntp_server: true
     ptp_server_clock: false
     latency_compensation: true
@@ -109,7 +109,7 @@ septentrio_gnss_driver:
         keep_open: true
 
     coordinate_transformation:
-      enable: true
+      enable: false
       source_coordinate_system: "ETRS89"
       target_coordinate_system: "WGS84"
       coordinate_transformation_epoch: "2020.0"
@@ -123,7 +123,7 @@ septentrio_gnss_driver:
       gpgga: false
       gprmc: false
       gpst: false
-      measepoch: false
+      measepoch: true
       pvtcartesian: false
       pvtgeodetic: true
       basevectorcart: false
@@ -139,6 +139,9 @@ septentrio_gnss_driver:
       diagnostics: false
       aimplusstatus: false
       galauthstatus: false
+      gpsnav: true
+      galnav: true
+      bdsnav: true
       # For GNSS Rx only
       gpgsa: false
       gpgsv: false
@@ -199,5 +202,5 @@ septentrio_gnss_driver:
 
     # logger
 
-    activate_debug_log: false
+    activate_debug_log: true
     log_sbf: true

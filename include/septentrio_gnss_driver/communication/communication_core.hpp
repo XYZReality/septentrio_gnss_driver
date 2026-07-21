@@ -126,6 +126,21 @@ namespace io {
          */
         void sendVelocity(const std::string& velNmea);
 
+        /**
+         * @brief Sends a setSatelliteUsage (ssu) command to the receiver to update
+         * which satellites are included in the PVT solution.
+         *
+         * If include_ids is non-empty, a reset command is sent first:
+         *   ssu, all   (or ssu, <include_ids joined by '+'>)
+         * If exclude_ids is non-empty, a removal command is sent:
+         *   ssu, -X01-X02-...
+         *
+         * @param[in] include_ids Satellite IDs to re-enable (e.g. {"all"} or {"G01","G02"})
+         * @param[in] exclude_ids Satellite IDs to remove from PVT (e.g. {"G03","E07"})
+         */
+        void sendSatelliteExclusion(const std::vector<std::string>& include_ids,
+                                    const std::vector<std::string>& exclude_ids);
+
     private:
         /**
          * @brief Resets Rx settings

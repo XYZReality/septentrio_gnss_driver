@@ -150,6 +150,9 @@ namespace io {
         //! Waits for capabilities
         void waitForCapabilities() { capabilitiesSemaphore_.wait(); }
 
+        //! Seeds leap seconds from settings (must be called before first SBF block)
+        void setLeapSeconds() { messageHandler_.setLeapSeconds(); }
+
     private:
         void handleSbf(const std::shared_ptr<Telegram>& telegram);
         void handleNmea(const std::shared_ptr<Telegram>& telegram);

@@ -61,6 +61,7 @@
 // C++ libraries
 #include <cassert> // for assert
 #include <cstddef>
+#include <cstring>  // for std::memset
 #include <map>
 #include <sstream>
 // Boost includes
@@ -135,7 +136,15 @@ enum SbfId
     EXT_SENSOR_MEAS = 4050,
     RECEIVER_TIME = 5914,
     GAL_AUTH_STATUS = 4245,
-    RF_STATUS = 4092
+    RF_STATUS = 4092,
+    GPS_NAV = 5891,
+    GAL_NAV = 4002,
+    BDS_NAV = 4081,
+    // Raw navigation subframe blocks (decoded by sbf_raw_decode.hpp)
+    GPS_RAW_CA   = 4017,
+    GAL_RAW_FNAV = 4022,
+    GAL_RAW_INAV = 4023,
+    BDS_RAW      = 4047
 };
 
 namespace io {
@@ -154,6 +163,14 @@ namespace io {
         MessageHandler(ROSaicNodeBase* node) :
             node_(node), settings_(node->settings()), unix_time_(0)
         {
+            std::memset(gps_sf_buf_,   0, sizeof(gps_sf_buf_));
+            std::memset(gps_sf_rx_,    0, sizeof(gps_sf_rx_));
+            std::memset(gal_inav_buf_, 0, sizeof(gal_inav_buf_));
+            std::memset(gal_inav_rx_,  0, sizeof(gal_inav_rx_));
+            std::memset(gal_fnav_buf_, 0, sizeof(gal_fnav_buf_));
+            std::memset(gal_fnav_rx_,  0, sizeof(gal_fnav_rx_));
+            std::memset(bds_d1_buf_,   0, sizeof(bds_d1_buf_));
+            std::memset(bds_d1_rx_,    0, sizeof(bds_d1_rx_));
         }
 
         /**
@@ -178,8 +195,8 @@ namespace io {
 
         void setLeapSeconds()
         {
-            // set leap seconds to paramter if reading from file
-            if (settings_->read_from_sbf_log || settings_->read_from_pcap)
+            // Fallback only; the receiver's ReceiverTime block overrides this.
+            if (settings_->leap_seconds != -128)
                 current_leap_seconds_ = settings_->leap_seconds;
         }
 
@@ -196,6 +213,13 @@ namespace io {
         void parseNmea(const std::shared_ptr<Telegram>& telegram);
 
     private:
+        /**
+         * @brief Whether to write this SBF block to the log. Latches on once the
+         * stream time reaches the host clock, skipping the receiver's buffered
+         * replay at connect.
+         */
+        bool sbfStreamIsLive(const std::shared_ptr<Telegram>& telegram);
+
         /**
          * @brief Header assembling
          * @param[in] frameId String of frame ID
@@ -363,6 +387,20 @@ namespace io {
          */
         RfStatusMsg last_rf_status_;
 
+        // ── Raw subframe accumulators (used by sbf_raw_decode.hpp handlers) ────
+        // GPS C/A: 32 PRNs × 90 bytes (SF1@[0:30) SF2@[30:60) SF3@[60:90))
+        uint8_t gps_sf_buf_[32][90];
+        uint8_t gps_sf_rx_[32];  //!< bit k: SF(k+1) received for this PRN
+        // GAL I/NAV: 36 SVs × 112 bytes (word-type N @ [N*16:N*16+16))
+        uint8_t gal_inav_buf_[36][112];
+        uint8_t gal_inav_rx_[36]; //!< bits 0–6: word types 0–6 received
+        // GAL F/NAV: 36 SVs × 186 bytes (page-type N @ [(N-1)*31:N*31))
+        uint8_t gal_fnav_buf_[36][186];
+        uint8_t gal_fnav_rx_[36]; //!< bits 0–5: page types 1–6 received
+        // BDS D1: 63 PRNs × 114 bytes (SF1@[0:38) SF2@[38:76) SF3@[76:114))
+        uint8_t bds_d1_buf_[63][114];
+        uint8_t bds_d1_rx_[63];  //!< bit k: SF(k+1) received for this PRN
+
         //! When reading from an SBF file, the ROS publishing frequency is governed
         //! by the time stamps found in the SBF blocks therein.
         Timestamp unix_time_;
@@ -372,6 +410,18 @@ namespace io {
 
         //! Current leap seconds as received, do not use value is -128
         int32_t current_leap_seconds_ = -128;
+
+        //! True once leap seconds came from a receiver ReceiverTime block
+        bool leap_seconds_from_receiver_ = false;
+
+        //! Latch so the missing-ReceiverTime warning is logged only once
+        bool fallback_leap_seconds_warned_ = false;
+
+        //! Once true, SBF logging is on for the session (skips connect replay)
+        bool sbf_log_latched_ = false;
+
+        //! Blocks seen before the SBF log latched on (escape hatch)
+        uint32_t sbf_pre_latch_blocks_ = 0;
 
         /**
          * @brief Set status of NavSatFix messages

@@ -141,6 +141,8 @@ namespace rosaic_node {
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
         //! Flag indicating whether the connection to the receiver is active
         bool isConnected_ = false;
+        //! Subscription for satellite exclusion commands from the filter node
+        rclcpp::Subscription<ExcludeSatellitesMsg>::SharedPtr exclude_sv_sub_;
         
         /**
          * @brief Advertises the start and stop services
@@ -173,5 +175,16 @@ namespace rosaic_node {
         void stopServiceCallback(
             const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+        /**
+         * @brief Callback for satellite exclusion commands from the filter node.
+         *
+         * Translates the ExcludeSatellites message into one or two ssu commands
+         * and forwards them to the receiver via IO_.sendSatelliteExclusion().
+         *
+         * @param[in] msg The exclusion command message
+         */
+        void excludeSatellitesCallback(
+            const ExcludeSatellitesMsg::SharedPtr msg);
     };
 } // namespace rosaic_node
