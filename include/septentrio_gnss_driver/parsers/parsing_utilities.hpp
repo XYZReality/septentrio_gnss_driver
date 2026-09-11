@@ -555,4 +555,19 @@ namespace parsing_utilities {
         return static_cast<uint64_t>(diff) > threshold_ns;
     }
 
+    //! Converts a receiver-time SBF stamp to GNSS system time.
+    //! SBF Reference Guide 2.3: every SBF block time stamp is in the RECEIVER
+    //! time scale, which is only steered to GNSS time to within the
+    //! setClockSyncThreshold band. PVTGeodetic/PVTCartesian give the residual
+    //! as RxClkBias, with the conversion t_GNSS = t_rx - RxClkBias.
+    //! `rx_clk_bias_ms` is the raw field, in milliseconds; positive means the
+    //! receiver clock is AHEAD of GNSS time, so the stamp moves earlier.
+    inline uint64_t toGnssTime(uint64_t rx_time_ns, double rx_clk_bias_ms)
+    {
+        if (rx_time_ns == 0) // no valid TOW/WNc to correct
+            return rx_time_ns;
+        return static_cast<uint64_t>(static_cast<int64_t>(rx_time_ns) -
+                                     static_cast<int64_t>(rx_clk_bias_ms * 1.0e6));
+    }
+
 } // namespace parsing_utilities

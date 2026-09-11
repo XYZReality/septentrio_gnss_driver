@@ -114,3 +114,55 @@ TEST(StaleGnssTimestamp, exactlyAtThresholdNotStale)
     const uint64_t gnss = host - threshold;
     EXPECT_FALSE(parsing_utilities::isStaleGnssTimestamp(gnss, host, threshold));
 }
+
+// --- toGnssTime -------------------------------------------------------------
+//
+// SBF block stamps are in the RECEIVER time scale; PVTGeodetic reports the
+// residual as RxClkBias, with t_GNSS = t_rx - RxClkBias (SBF Reference Guide).
+// The point of the function is the SIGN: backwards doubles the error instead of
+// removing it, and nothing downstream would notice.
+
+TEST(ToGnssTime, positiveBiasMovesTheStampEarlier)
+{
+    // Receiver clock AHEAD of GNSS time => its stamps read late => correct back.
+    const uint64_t rx = 1700000000000000000ULL;
+    const uint64_t corrected = parsing_utilities::toGnssTime(rx, 0.4);
+
+    EXPECT_LT(corrected, rx);
+    EXPECT_EQ(rx - corrected, 400000ULL); // 0.4 ms
+}
+
+TEST(ToGnssTime, negativeBiasMovesTheStampLater)
+{
+    // Receiver clock BEHIND GNSS time. This is the case actually observed on
+    // 20260723_rigby-helical-test-2: RxClkBias averaged -0.403 ms, so the
+    // uncorrected stamps were ~0.4 ms early.
+    const uint64_t rx = 1700000000000000000ULL;
+    const uint64_t corrected = parsing_utilities::toGnssTime(rx, -0.403);
+
+    EXPECT_GT(corrected, rx);
+    EXPECT_EQ(corrected - rx, 403000ULL);
+}
+
+TEST(ToGnssTime, zeroBiasIsIdentity)
+{
+    const uint64_t rx = 1700000000000000000ULL;
+    EXPECT_EQ(parsing_utilities::toGnssTime(rx, 0.0), rx);
+}
+
+TEST(ToGnssTime, invalidStampIsLeftAlone)
+{
+    // timestampSBF returns 0 when TOW/WNc are Do-Not-Use. Correcting that would
+    // turn a recognisably-invalid stamp into a small plausible-looking one.
+    EXPECT_EQ(parsing_utilities::toGnssTime(0ULL, -0.403), 0ULL);
+}
+
+TEST(ToGnssTime, survivesAFullClockSteerJump)
+{
+    // The receiver steers in 1 ms steps; the sawtooth spans the whole band.
+    const uint64_t rx = 1700000000000000000ULL;
+    const uint64_t low  = parsing_utilities::toGnssTime(rx, -0.5);
+    const uint64_t high = parsing_utilities::toGnssTime(rx, 0.5);
+
+    EXPECT_EQ(low - high, 1000000ULL); // 1 ms apart, and ordered
+}

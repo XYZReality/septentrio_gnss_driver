@@ -408,6 +408,11 @@ namespace io {
         //! Last reported PVT processing latency
         mutable uint64_t last_pvt_latency_ = 0;
 
+        //! Last valid receiver-clock bias, ms. Signed: the receiver may run
+        //! either side of GNSS time. Carried across the blocks of one epoch
+        //! that do not themselves report it. See parsing_utilities::toGnssTime.
+        mutable double last_rx_clk_bias_ms_ = 0.0;
+
         //! Current leap seconds as received, do not use value is -128
         int32_t current_leap_seconds_ = -128;
 

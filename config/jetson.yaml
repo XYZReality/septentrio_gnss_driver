@@ -79,7 +79,9 @@ septentrio_gnss_driver:
     leap_seconds: 18
     ntp_server: true
     ptp_server_clock: false
-    latency_compensation: true
+    # No-op while use_gnss_time is true: the SBF block stamp is already the
+    # epoch of applicability, so there is no arrival latency to remove.
+    latency_compensation: false
 
     # RTK
     rtk_settings:  

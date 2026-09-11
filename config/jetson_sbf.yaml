@@ -78,7 +78,7 @@ septentrio_gnss_driver:
     leap_seconds: 18
     ntp_server: true
     ptp_server_clock: false
-    latency_compensation: true
+    latency_compensation: false
 
     # RTK
     rtk_settings:  

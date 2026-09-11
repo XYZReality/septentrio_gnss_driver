@@ -2162,6 +2162,19 @@ namespace io {
                                  : telegram->stamp;
         msg.header.frame_id = frameId;
 
+        if (settings_->use_gnss_time)
+        {
+            // Only the PVT blocks carry the bias, so it is cached for the other
+            // blocks of the same epoch, exactly as latency is below.
+            if constexpr (std::is_same<PVTCartesianMsg, T>::value ||
+                          std::is_same<PVTGeodeticMsg, T>::value)
+            {
+                if (validValue(msg.rx_clk_bias))
+                    last_rx_clk_bias_ms_ = msg.rx_clk_bias;
+            }
+            time_obj = parsing_utilities::toGnssTime(time_obj, last_rx_clk_bias_ms_);
+        }
+
         if (!settings_->use_gnss_time && settings_->latency_compensation)
         {
             if constexpr (std::is_same<INSNavCartMsg, T>::value ||
@@ -2380,8 +2393,18 @@ namespace io {
 
         uint16_t sbfId = parsing_utilities::getId(telegram->message);
 
-        if (settings_->log_sbf && sbf_writer_running_ && sbfStreamIsLive(telegram))
+        // The receiver flushes whatever is sitting in its output buffer when we
+        // open the port, so the first blocks of a session can be minutes old.
+        // Measured on 20260723_rigby-helical-test-2: 6 MeasEpoch blocks arrived
+        // stamped 296 s in the past. Evaluated before the log_sbf check because
+        // it must gate publishing too, not just the file.
+        const bool live = sbfStreamIsLive(telegram);
+
+        if (settings_->log_sbf && sbf_writer_running_ && live)
             sbf_write_queue_.push(telegram->message);
+
+        if (!live)
+            return;
 
         /*node_->log(log_level::DEBUG, "ROSaic reading SBF block " +
                                         std::to_string(sbfId) + " made up of " +
